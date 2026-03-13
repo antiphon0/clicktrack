@@ -350,5 +350,27 @@ body {
 
 .stat-value {
   font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Per-key combo badge */
+.key-combo {
+  position: absolute;
+  bottom: 2px;
+  right: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--gold);
+  pointer-events: none;
+}
+
+/* Clickable keys */
+.key.active {
+  cursor: pointer;
+}
+
+.stat-value {
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }

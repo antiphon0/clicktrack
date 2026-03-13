@@ -170,21 +170,26 @@ function isTapOnBeat(tapTime, beatOrigin, bpm, tolerancePercent) {
   return offset <= tolerance || offset >= interval - tolerance;
 }
 
-if (typeof module !== 'undefined') {
-  module.exports = {
-    createDefaultState,
-    processTap,
-    processMiss,
-    upgradeKey,
-    unlockTier,
-    getKeyUpgradeCost,
-    getKeyValue,
-    getComboMultiplier,
-    getTierUnlockCost,
-    beatIntervalMs,
-    isTapOnBeat,
-    KEY_TIERS,
-    ALL_KEYS,
-    COMBO_THRESHOLDS,
-  };
+const _gameExports = {
+  createDefaultState,
+  processTap,
+  processMiss,
+  upgradeKey,
+  unlockTier,
+  getKeyUpgradeCost,
+  getKeyValue,
+  getComboMultiplier,
+  getTierUnlockCost,
+  beatIntervalMs,
+  isTapOnBeat,
+  KEY_TIERS,
+  ALL_KEYS,
+  COMBO_THRESHOLDS,
+};
+
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = _gameExports;
+}
+if (typeof window !== 'undefined') {
+  window.Game = _gameExports;
 }

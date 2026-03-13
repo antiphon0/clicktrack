@@ -1,28 +1,17 @@
 // Clicktrack renderer — ties game engine, Spotify, and UI together
+// game.js & spotify.js are loaded before this via <script> tags
+// and expose window.Game and window.SpotifyIntegration
 
-const {
-  createDefaultState,
-  processTap,
-  processMiss,
-  upgradeKey,
-  unlockTier,
-  getKeyUpgradeCost,
-  getKeyValue,
-  getComboMultiplier,
-  getTierUnlockCost,
-  beatIntervalMs,
-  isTapOnBeat,
-  KEY_TIERS,
-  ALL_KEYS,
-} = typeof require !== 'undefined' ? require('./game.js') : window;
+const G = window.Game;
 
 // --- State ---
-let state = createDefaultState();
+let state = G.createDefaultState();
 let currentBpm = state.offlineSong.bpm;
-let beatOrigin = performance.now(); // reference timestamp for beat grid
+let beatOrigin = performance.now();
 let isSpotifyConnected = false;
 let beatTimer = null;
 let saveInterval = null;
+let lastTappedKey = null;
 
 // --- DOM refs ---
 const $ = (sel) => document.querySelector(sel);
@@ -63,15 +52,19 @@ function updateBpm() {
 }
 
 function updateCombo() {
-  // Show highest active combo across all keys
-  let maxCombo = 0;
-  for (const key of ALL_KEYS) {
-    if (state.keys[key].unlocked && state.keys[key].combo > maxCombo) {
-      maxCombo = state.keys[key].combo;
+  // Show combo for the last tapped key, or highest active
+  let displayCombo = 0;
+  if (lastTappedKey && state.keys[lastTappedKey]?.unlocked) {
+    displayCombo = state.keys[lastTappedKey].combo;
+  } else {
+    for (const key of G.ALL_KEYS) {
+      if (state.keys[key].unlocked && state.keys[key].combo > displayCombo) {
+        displayCombo = state.keys[key].combo;
+      }
     }
   }
-  comboCountEl.textContent = maxCombo;
-  comboMultEl.textContent = `×${getComboMultiplier(maxCombo)}`;
+  comboCountEl.textContent = displayCombo;
+  comboMultEl.textContent = `×${G.getComboMultiplier(displayCombo)}`;
 }
 
 function showFeedback(text, cls) {
@@ -85,27 +78,41 @@ function showFeedback(text, cls) {
 }
 
 function updateKeyGrid() {
-  for (const key of ALL_KEYS) {
+  for (const key of G.ALL_KEYS) {
     const el = $(`.key[data-key="${key}"]`);
     if (!el) continue;
     const ks = state.keys[key];
     el.classList.toggle('locked', !ks.unlocked);
     el.classList.toggle('active', ks.unlocked);
+
+    // Show per-key combo count on the tile
+    let comboSpan = el.querySelector('.key-combo');
+    if (ks.unlocked && ks.combo > 0) {
+      if (!comboSpan) {
+        comboSpan = document.createElement('span');
+        comboSpan.className = 'key-combo';
+        el.appendChild(comboSpan);
+      }
+      comboSpan.textContent = ks.combo;
+    } else if (comboSpan) {
+      comboSpan.remove();
+    }
   }
 }
 
 function updateUpgrades() {
   keyUpgradesEl.innerHTML = '';
-  for (const key of ALL_KEYS) {
+  for (const key of G.ALL_KEYS) {
     const ks = state.keys[key];
     if (!ks.unlocked) continue;
 
-    const cost = getKeyUpgradeCost(ks.level);
+    const cost = G.getKeyUpgradeCost(ks.level);
+    const value = G.getKeyValue(state, key);
     const div = document.createElement('div');
     div.className = 'key-upgrade';
     div.innerHTML = `
       <span class="key-upgrade-label">${key.toUpperCase()}</span>
-      <span class="key-upgrade-level">Lv ${ks.level}</span>
+      <span class="key-upgrade-level">Lv ${ks.level} · ${formatNumber(value)}/tap</span>
       <button class="btn btn-small" data-upgrade-key="${key}"
         ${state.currency < cost ? 'disabled' : ''}>
         ↑ ${formatNumber(cost)}
@@ -116,7 +123,7 @@ function updateUpgrades() {
 
   // Tier unlock
   const nextTier = state.tierUnlocked + 1;
-  const tierDef = KEY_TIERS.find((t) => t.tier === nextTier);
+  const tierDef = G.KEY_TIERS.find((t) => t.tier === nextTier);
   if (tierDef) {
     tierCostEl.textContent = formatNumber(tierDef.unlockCost);
     unlockTierBtn.disabled = state.currency < tierDef.unlockCost;
@@ -146,24 +153,35 @@ function refreshUI() {
   updateStats();
 }
 
-// --- Beat Pulse ---
+// --- Beat Pulse (drift-correcting) ---
 function startBeatPulse() {
-  if (beatTimer) clearInterval(beatTimer);
-  const interval = beatIntervalMs(currentBpm);
+  if (beatTimer) cancelAnimationFrame(beatTimer);
+  const interval = G.beatIntervalMs(currentBpm);
   beatOrigin = performance.now();
+  let nextBeat = beatOrigin + interval;
 
-  beatTimer = setInterval(() => {
-    beatPulse.classList.add('pulse');
-    // Flash on-beat indicator on active keys
-    for (const key of ALL_KEYS) {
-      if (state.keys[key].unlocked) {
-        const el = $(`.key[data-key="${key}"]`);
-        el.classList.add('on-beat');
-        setTimeout(() => el.classList.remove('on-beat'), 100);
+  function tick() {
+    const now = performance.now();
+    if (now >= nextBeat) {
+      // Fire beat
+      beatPulse.classList.add('pulse');
+      for (const key of G.ALL_KEYS) {
+        if (state.keys[key].unlocked) {
+          const el = $(`.key[data-key="${key}"]`);
+          el.classList.add('on-beat');
+          setTimeout(() => el.classList.remove('on-beat'), 80);
+        }
       }
+      setTimeout(() => beatPulse.classList.remove('pulse'), 120);
+
+      // Schedule next beat (drift-correcting: advance from expected, not from now)
+      nextBeat += interval;
+      // If we fell behind by more than a full beat, snap forward
+      if (nextBeat < now) nextBeat = now + interval;
     }
-    setTimeout(() => beatPulse.classList.remove('pulse'), 150);
-  }, interval);
+    beatTimer = requestAnimationFrame(tick);
+  }
+  beatTimer = requestAnimationFrame(tick);
 }
 
 function setBpm(bpm) {
@@ -172,17 +190,42 @@ function setBpm(bpm) {
   startBeatPulse();
 }
 
+// --- Key Aliases (arrow keys + numpad map to the same game keys) ---
+const KEY_ALIASES = {
+  // Arrow keys → WASD
+  arrowup: 'w',
+  arrowleft: 'a',
+  arrowdown: 's',
+  arrowright: 'd',
+  // Numpad → full grid
+  '5': 's',          // Numpad 5 (center)
+  '8': 'w',          // Numpad 8 (up)
+  '4': 'a',          // Numpad 4 (left)
+  '6': 'd',          // Numpad 6 (right)
+  '7': 'q',          // Numpad 7 (top-left)
+  '9': 'e',          // Numpad 9 (top-right)
+  '1': 'z',          // Numpad 1 (bottom-left)
+  '3': 'c',          // Numpad 3 (bottom-right)
+  '2': 'x',          // Numpad 2 (bottom-center)
+};
+
+function resolveKey(raw) {
+  const lower = raw.toLowerCase();
+  return KEY_ALIASES[lower] || lower;
+}
+
 // --- Input Handling ---
-function handleKeyPress(key) {
-  const keyLower = key.toLowerCase();
-  if (!ALL_KEYS.includes(keyLower)) return;
+function handleTap(key) {
+  const keyLower = resolveKey(key);
+  if (!G.ALL_KEYS.includes(keyLower)) return;
 
   const ks = state.keys[keyLower];
   if (!ks || !ks.unlocked) return;
 
+  lastTappedKey = keyLower;
   const el = $(`.key[data-key="${keyLower}"]`);
   const now = performance.now();
-  const onBeat = isTapOnBeat(
+  const onBeat = G.isTapOnBeat(
     now,
     beatOrigin,
     currentBpm,
@@ -190,17 +233,17 @@ function handleKeyPress(key) {
   );
 
   if (onBeat) {
-    const { earned } = processTap(state, keyLower);
+    const { earned } = G.processTap(state, keyLower);
     el.classList.add('hit');
     setTimeout(() => el.classList.remove('hit'), 100);
 
-    if (earned > getKeyValue(state, keyLower) * 2) {
+    if (earned > G.getKeyValue(state, keyLower) * 2) {
       showFeedback(`+${formatNumber(earned)} BONUS!`, 'feedback-bonus');
     } else {
       showFeedback(`+${formatNumber(earned)}`, 'feedback-hit');
     }
   } else {
-    processMiss(state, keyLower);
+    G.processMiss(state, keyLower);
     el.classList.add('miss');
     setTimeout(() => el.classList.remove('miss'), 200);
     showFeedback('MISS', 'feedback-miss');
@@ -210,9 +253,25 @@ function handleKeyPress(key) {
 }
 
 // --- Event Listeners ---
+
+// Keyboard input
 document.addEventListener('keydown', (e) => {
   if (e.repeat) return;
-  handleKeyPress(e.key);
+  // Don't capture when typing in inputs
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  const gameKey = resolveKey(e.key);
+  if (G.ALL_KEYS.includes(gameKey)) {
+    e.preventDefault(); // prevent arrow key scroll / numpad input
+    handleTap(e.key);
+  }
+});
+
+// Mouse/touch input on the beat grid
+document.getElementById('beat-grid').addEventListener('click', (e) => {
+  const keyEl = e.target.closest('.key');
+  if (!keyEl) return;
+  const key = keyEl.dataset.key;
+  if (key) handleTap(key);
 });
 
 // Upgrade buttons (delegated)
@@ -220,20 +279,71 @@ keyUpgradesEl.addEventListener('click', (e) => {
   const btn = e.target.closest('[data-upgrade-key]');
   if (!btn) return;
   const key = btn.dataset.upgradeKey;
-  upgradeKey(state, key);
+  G.upgradeKey(state, key);
   refreshUI();
 });
 
 unlockTierBtn.addEventListener('click', () => {
-  unlockTier(state);
+  G.unlockTier(state);
   refreshUI();
 });
 
-// Spotify connect placeholder
-spotifyConnectBtn.addEventListener('click', () => {
-  // TODO: wire up SpotifyIntegration.login() once client ID is set
-  showFeedback('Set SPOTIFY_CLIENT_ID first', 'feedback-miss');
+// Spotify connect
+const spotify = new window.SpotifyIntegration();
+
+spotify.onBpmChange = (bpm) => {
+  setBpm(bpm);
+};
+
+spotify.onTrackChange = (track) => {
+  trackNameEl.textContent = track.name;
+  trackArtistEl.textContent = track.artist;
+  if (track.artUrl) {
+    albumArtEl.src = track.artUrl;
+    albumArtEl.style.display = '';
+    albumArtPlaceholder.style.display = 'none';
+  }
+};
+
+spotify.onConnectionChange = (connected) => {
+  isSpotifyConnected = connected;
+  spotifyConnectBtn.textContent = connected ? 'Connected ✓' : 'Connect Spotify';
+  spotifyConnectBtn.disabled = connected;
+  if (!connected) {
+    setBpm(state.offlineSong.bpm);
+    trackNameEl.textContent = 'No song playing';
+    trackArtistEl.textContent = '';
+    albumArtEl.style.display = 'none';
+    albumArtPlaceholder.style.display = '';
+  }
+  updateBpm();
+};
+
+spotifyConnectBtn.addEventListener('click', async () => {
+  await spotify.login();
 });
+
+// Check for OAuth callback on load
+(async function checkSpotifyCallback() {
+  const params = new URLSearchParams(window.location.search);
+  const code = params.get('code');
+  if (code) {
+    try {
+      await spotify.handleCallback(code);
+      // Load Spotify Web Playback SDK
+      const script = document.createElement('script');
+      script.src = 'https://sdk.scdn.co/spotify-player.js';
+      document.body.appendChild(script);
+      window.onSpotifyWebPlaybackSDKReady = () => {
+        spotify.initPlayer();
+      };
+      // Clean URL
+      window.history.replaceState({}, '', window.location.pathname);
+    } catch (err) {
+      showFeedback('Spotify auth failed', 'feedback-miss');
+    }
+  }
+})();
 
 // --- Save / Load ---
 async function saveGame() {
@@ -246,7 +356,18 @@ async function loadGame() {
   if (window.clicktrack?.loadGame) {
     const saved = await window.clicktrack.loadGame();
     if (saved) {
-      state = saved;
+      // Merge with defaults to handle new fields added in updates
+      const defaults = G.createDefaultState();
+      state = { ...defaults, ...saved, keys: { ...defaults.keys } };
+      // Restore saved key state
+      for (const key of G.ALL_KEYS) {
+        if (saved.keys?.[key]) {
+          state.keys[key] = { ...defaults.keys[key], ...saved.keys[key] };
+        }
+      }
+      state.stats = { ...defaults.stats, ...(saved.stats || {}) };
+      state.prestige = { ...defaults.prestige, ...(saved.prestige || {}) };
+      state.settings = { ...defaults.settings, ...(saved.settings || {}) };
     }
   }
 }
@@ -258,6 +379,8 @@ async function init() {
   startBeatPulse();
   // Auto-save every 30 seconds
   saveInterval = setInterval(saveGame, 30000);
+  // Also save on window close
+  window.addEventListener('beforeunload', () => saveGame());
 }
 
 init();

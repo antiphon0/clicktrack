@@ -180,6 +180,9 @@ class SpotifyIntegration {
   }
 }
 
-if (typeof module !== 'undefined') {
+if (typeof module !== 'undefined' && module.exports) {
   module.exports = { SpotifyIntegration };
+}
+if (typeof window !== 'undefined') {
+  window.SpotifyIntegration = SpotifyIntegration;
 }
