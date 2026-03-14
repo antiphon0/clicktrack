@@ -238,16 +238,15 @@ body {
   box-shadow: 0 0 20px var(--key-glow, var(--accent-glow));
 }
 
-/* Notes — transparent container; shape comes from arrow children */
+/* Notes — the SVG element is the note itself */
 .note {
   position: absolute;
   left: 50%;
   transform: translateX(-50%);
-  width: 64px;
-  height: 64px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  width: 52px;
+  height: 52px;
+  display: block;
+  overflow: visible;
   opacity: 0;
   transition: opacity 0.1s;
   pointer-events: none;
@@ -265,80 +264,22 @@ body {
 .note-key-x, .lane-label-key-x { --key-color: #aaddff; --key-glow: rgba(170,221,255,0.6); }
 .note-key-c, .lane-label-key-c { --key-color: #44ffcc; --key-glow: rgba(68,255,204,0.6); }
 
-/* Arrow shape — solid filled, clip-path */
-.arrow-wrap {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  flex-shrink: 0;
+/* Lane label arrows */
+.label-arrow {
+  display: block;
+  width: 36px;
+  height: 36px;
+  overflow: visible;
 }
 
-/* note IS the arrow-wrap, so .note controls position/size */
-.note.arrow-wrap { display: block; }
-
-.arrow-outer {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-
-/* clip-path shapes — cardinal */
-.arrow-up    { clip-path: polygon(50% 5%, 95% 52%, 68% 52%, 68% 95%, 32% 95%, 32% 52%, 5% 52%); }
-.arrow-down  { clip-path: polygon(50% 95%, 95% 48%, 68% 48%, 68% 5%,  32% 5%,  32% 48%, 5% 48%); }
-.arrow-left  { clip-path: polygon(5% 50%, 52% 5%,  52% 32%, 95% 32%, 95% 68%, 52% 68%, 52% 95%); }
-.arrow-right { clip-path: polygon(95% 50%, 48% 5%, 48% 32%, 5% 32%,  5% 68%,  48% 68%, 48% 95%); }
-/* clip-path shapes — diagonal (no rotation needed, stays within bounding box) */
-.arrow-upleft   { clip-path: polygon(5% 5%, 5% 50%, 25% 30%, 70% 75%, 75% 70%, 30% 25%, 50% 5%); }
-.arrow-upright  { clip-path: polygon(95% 5%, 50% 5%, 70% 25%, 25% 70%, 30% 75%, 75% 30%, 95% 50%); }
-.arrow-downleft { clip-path: polygon(5% 95%, 50% 95%, 30% 75%, 75% 30%, 70% 25%, 25% 70%, 5% 50%); }
-.arrow-downright{ clip-path: polygon(95% 95%, 95% 50%, 75% 70%, 30% 25%, 25% 30%, 70% 75%, 50% 95%); }
-
-/* No inner cutout — keep solid, use border-style outline effect via drop-shadow */
-.arrow-inner { display: none; }
-
-/* Per-key outer fill colors */
-.note-key-a .arrow-outer, .lane-label-key-a .arrow-outer { background: #ff4455; filter: drop-shadow(0 0 6px rgba(255,68,85,0.9)); }
-.note-key-w .arrow-outer, .lane-label-key-w .arrow-outer { background: #44dd77; filter: drop-shadow(0 0 6px rgba(68,221,119,0.9)); }
-.note-key-s .arrow-outer, .lane-label-key-s .arrow-outer { background: #4499ff; filter: drop-shadow(0 0 6px rgba(68,153,255,0.9)); }
-.note-key-d .arrow-outer, .lane-label-key-d .arrow-outer { background: #ffdd33; filter: drop-shadow(0 0 6px rgba(255,221,51,0.9)); }
-.note-key-q .arrow-outer, .lane-label-key-q .arrow-outer { background: #cc44ff; filter: drop-shadow(0 0 6px rgba(204,68,255,0.9)); }
-.note-key-e .arrow-outer, .lane-label-key-e .arrow-outer { background: #ff8833; filter: drop-shadow(0 0 6px rgba(255,136,51,0.9)); }
-.note-key-z .arrow-outer, .lane-label-key-z .arrow-outer { background: #ff44cc; filter: drop-shadow(0 0 6px rgba(255,68,204,0.9)); }
-.note-key-x .arrow-outer, .lane-label-key-x .arrow-outer { background: #aaddff; filter: drop-shadow(0 0 6px rgba(170,221,255,0.9)); }
-.note-key-c .arrow-outer, .lane-label-key-c .arrow-outer { background: #44ffcc; filter: drop-shadow(0 0 6px rgba(68,255,204,0.9)); }
-
-/* Smaller arrows for lane labels */
-.arrow-wrap.label-arrow {
-  width: 38px;
-  height: 38px;
-}
-.label-arrow .arrow-outer,
-.label-arrow .arrow-inner {
-  width: 38px;
-  height: 38px;
-}
-.label-arrow .arrow-inner {
-  inset: 4px;
-  width: calc(100% - 8px);
-  height: calc(100% - 8px);
-}
-
-/* Note hit/miss states — flash the outer arrow */
-.note-hit .arrow-outer {
-  background: var(--hit) !important;
-  filter: drop-shadow(0 0 12px rgba(92,252,124,0.9)) !important;
-}
+/* Note hit/miss states */
 .note-hit {
+  filter: drop-shadow(0 0 14px rgba(92,252,124,1)) !important;
   transform: translateX(-50%) scale(1.3);
   opacity: 0 !important;
   transition: transform 0.15s, opacity 0.15s;
 }
 
-.note-miss .arrow-outer {
-  background: var(--miss) !important;
-  filter: none !important;
-}
 .note-miss {
   opacity: 0.25 !important;
   transition: opacity 0.2s;
@@ -465,7 +406,7 @@ body {
   border: 1px solid var(--border);
   border-radius: 10px;
   padding: 20px;
-  width: 480px;
+  width: 360px;
   max-width: 92vw;
   display: flex;
   flex-direction: column;
@@ -481,45 +422,30 @@ body {
 }
 
 #source-list {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   overflow-y: auto;
-  max-height: 340px;
+  max-height: 320px;
 }
 
 .source-item {
   background: var(--bg);
-  border: 2px solid transparent;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  padding: 6px;
+  padding: 9px 12px;
   cursor: pointer;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 5px;
+  text-align: left;
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   transition: border-color 0.12s, background 0.12s;
 }
 
 .source-item:hover {
   border-color: var(--accent);
-  background: rgba(124, 92, 252, 0.1);
-}
-
-.source-item img {
-  width: 100%;
-  aspect-ratio: 16/10;
-  object-fit: cover;
-  border-radius: 3px;
-  background: #000;
-}
-
-.source-item span {
-  font-size: 10px;
-  color: var(--text-dim);
-  text-align: center;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  width: 100%;
+  background: rgba(124, 92, 252, 0.12);
+  color: #fff;
 }

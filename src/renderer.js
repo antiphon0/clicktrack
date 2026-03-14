@@ -76,24 +76,25 @@ function getUnlockedKeys() {
 
 // Lane order matches physical keyboard position left-to-right (QWERTY x-offsets)
 const LANE_ORDER = ['q', 'a', 'z', 'w', 's', 'x', 'e', 'd', 'c'];
-const KEY_ARROWS = { q: '↖', w: '↑', e: '↗', a: '←', s: '↓', d: '→', z: '↙', x: '⬇', c: '↘' };
-// Map each key to a clip-path arrow direction (diagonals have their own shapes — no rotation needed)
-const KEY_DIR = { w: 'up', s: 'down', a: 'left', d: 'right', q: 'upleft', e: 'upright', z: 'downleft', x: 'down', c: 'downright' };
-const KEY_ROT = {};
+// Inline SVG arrows — one path rotated per direction, no overflow issues
+const KEY_ANGLE = { w: 0, d: 90, s: 180, a: 270, e: 45, c: 135, x: 180, z: 225, q: 315 };
+const KEY_COLOR = { a: '#ff4455', w: '#44dd77', s: '#4499ff', d: '#ffdd33', q: '#cc44ff', e: '#ff8833', z: '#ff44cc', x: '#aaddff', c: '#44ffcc' };
+const KEY_GLOW  = { a: 'rgba(255,68,85,0.9)', w: 'rgba(68,221,119,0.9)', s: 'rgba(68,153,255,0.9)', d: 'rgba(255,221,51,0.9)', q: 'rgba(204,68,255,0.9)', e: 'rgba(255,136,51,0.9)', z: 'rgba(255,68,204,0.9)', x: 'rgba(170,221,255,0.9)', c: 'rgba(68,255,204,0.9)' };
+const ARROW_PATH = 'M 50,5 L 95,50 L 68,50 L 68,95 L 32,95 L 32,50 L 5,50 Z';
 
 function createArrowEl(key) {
-  const dir = KEY_DIR[key] || 'up';
-  const rot = KEY_ROT[key] || 0;
-  const wrap = document.createElement('div');
-  wrap.classList.add('arrow-wrap');
-  if (rot !== 0) wrap.style.transform = `rotate(${rot}deg)`;
-  const outer = document.createElement('div');
-  outer.classList.add('arrow-outer', `arrow-${dir}`);
-  const inner = document.createElement('div');
-  inner.classList.add('arrow-inner', `arrow-${dir}`);
-  wrap.appendChild(outer);
-  wrap.appendChild(inner);
-  return wrap;
+  const angle = KEY_ANGLE[key] ?? 0;
+  const color = KEY_COLOR[key] || '#ffffff';
+  const glow  = KEY_GLOW[key]  || 'rgba(255,255,255,0.5)';
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 100 100');
+  svg.style.filter = `drop-shadow(0 0 7px ${glow})`;
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', ARROW_PATH);
+  path.setAttribute('fill', color);
+  if (angle !== 0) path.setAttribute('transform', `rotate(${angle}, 50, 50)`);
+  svg.appendChild(path);
+  return svg;
 }
 
 // --- Lane Management ---
@@ -126,12 +127,9 @@ async function openSourcePicker() {
 
   sourceList.innerHTML = '';
   for (const src of sources) {
-    const item = document.createElement('div');
+    const item = document.createElement('button');
     item.className = 'source-item';
-    item.innerHTML = `
-      <img src="${src.thumbnail}" alt="">
-      <span>${src.name}</span>
-    `;
+    item.textContent = src.name;
     item.addEventListener('click', async () => {
       await window.clicktrack.setSource(src.id);
       sourcePickerOverlay.style.display = 'none';
