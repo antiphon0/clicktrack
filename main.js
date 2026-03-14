@@ -9,7 +9,6 @@ app.commandLine.appendSwitch('enable-unsafe-swiftshader');
 
 let mainWindow;
 let userDataPath;
-let chosenSourceId = null;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -36,14 +35,11 @@ function createWindow() {
 app.whenReady().then(() => {
   userDataPath = app.getPath('userData');
 
-  // Use chosen source if set, otherwise fall back to first screen
+  // Always capture system loopback audio (all audio output)
   session.defaultSession.setDisplayMediaRequestHandler(async (_request, callback) => {
-    const sources = await desktopCapturer.getSources({ types: ['screen', 'window'] });
-    const source = chosenSourceId
-      ? sources.find((s) => s.id === chosenSourceId) || sources[0]
-      : sources[0];
-    if (source) {
-      callback({ video: source, audio: 'loopback' });
+    const sources = await desktopCapturer.getSources({ types: ['screen'] });
+    if (sources[0]) {
+      callback({ video: sources[0], audio: 'loopback' });
     } else {
       callback(null);
     }
@@ -69,19 +65,4 @@ ipcMain.handle('load-game', async () => {
   return null;
 });
 
-ipcMain.handle('get-sources', async () => {
-  const sources = await desktopCapturer.getSources({
-    types: ['screen', 'window'],
-    thumbnailSize: { width: 200, height: 120 },
-  });
-  return sources.map((s) => ({
-    id: s.id,
-    name: s.name,
-    thumbnail: s.thumbnail.toDataURL(),
-  }));
-});
 
-ipcMain.handle('set-source', (_event, id) => {
-  chosenSourceId = id;
-  return true;
-});

@@ -60,10 +60,13 @@ function getKeyUpgradeCost(level) {
   return Math.floor(10 * Math.pow(1.15, level - 1));
 }
 
+// Rare (non-WASD) keys are worth 3× more per hit
+const KEY_VALUE_BONUS = { q: 3, e: 3, z: 3, x: 3, c: 3 };
+
 function getKeyValue(state, key) {
   const keyState = state.keys[key];
   if (!keyState || !keyState.unlocked) return 0;
-  return keyState.level * state.prestige.multiplier;
+  return keyState.level * state.prestige.multiplier * (KEY_VALUE_BONUS[key] || 1);
 }
 
 function getComboMultiplier(combo) {

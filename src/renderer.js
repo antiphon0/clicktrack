@@ -57,9 +57,9 @@ const okCountEl = $('#ok-count');
 const missCountEl = $('#miss-count');
 const lanesContainer = $('#lanes-container');
 const laneLabels = $('#lane-labels');
-const sourcePickerOverlay = $('#source-picker-overlay');
-const sourceList = $('#source-list');
-const sourceCancelBtn = $('#source-cancel-btn');
+const sourcePickerOverlay = null;
+const sourceList = null;
+const sourceCancelBtn = null;
 
 // --- Helpers ---
 function formatNumber(n) {
@@ -121,34 +121,8 @@ function rebuildLanes() {
 }
 
 // --- Source Picker ---
-async function openSourcePicker() {
-  beatCounterEl.textContent = 'Loading sources...';
-  const sources = await window.clicktrack.getSources();
-
-  sourceList.innerHTML = '';
-  for (const src of sources) {
-    const item = document.createElement('button');
-    item.className = 'source-item';
-    item.textContent = src.name;
-    item.addEventListener('click', async () => {
-      await window.clicktrack.setSource(src.id);
-      sourcePickerOverlay.style.display = 'none';
-      await startCapture();
-    });
-    sourceList.appendChild(item);
-  }
-
-  sourcePickerOverlay.style.display = 'flex';
-}
-
-sourceCancelBtn.addEventListener('click', () => {
-  sourcePickerOverlay.style.display = 'none';
-  beatCounterEl.textContent = 'Play some music and click Listen';
-});
-
-// --- Audio Capture ---
 async function startListening() {
-  await openSourcePicker();
+  await startCapture();
 }
 
 async function startCapture() {
@@ -245,11 +219,25 @@ function detectOnset() {
 }
 
 // --- Note Spawning ---
+// Primary keys appear 4× more often than rare keys
+const KEY_SPAWN_WEIGHT = { w: 4, a: 4, s: 4, d: 4, q: 1, e: 1, z: 1, x: 1, c: 1 };
+
+function weightedKey(keys) {
+  const weights = keys.map((k) => KEY_SPAWN_WEIGHT[k] ?? 1);
+  const total = weights.reduce((a, b) => a + b, 0);
+  let r = Math.random() * total;
+  for (let i = 0; i < keys.length; i++) {
+    r -= weights[i];
+    if (r <= 0) return keys[i];
+  }
+  return keys[keys.length - 1];
+}
+
 function spawnNote(now) {
   const unlocked = getUnlockedKeys();
   if (unlocked.length === 0) return;
 
-  const key = unlocked[Math.floor(Math.random() * unlocked.length)];
+  const key = weightedKey(unlocked);
   const hitTime = now + SCROLL_TIME_MS;
 
   const lane = lanesContainer.querySelector(`.lane[data-key="${key}"]`);
@@ -495,7 +483,7 @@ function showFeedback(type, earned) {
 
 // --- Events ---
 // Listen btn = pick a different source
-listenBtn.addEventListener('click', openSourcePicker);
+listenBtn.addEventListener('click', startCapture);
 stopBtn.addEventListener('click', stopListening);
 
 document.addEventListener('keydown', (e) => {
