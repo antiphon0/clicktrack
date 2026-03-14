@@ -390,4 +390,47 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+/* Dancers panel */
+#dancer-controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+#dancer-accuracy-label {
+  font-size: 12px;
+  min-height: 18px;
+  margin-bottom: 4px;
+}
+
+#dancer-figures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: flex-end;
+  min-height: 36px;
+  margin-bottom: 8px;
+}
+
+.dancer-figure {
+  display: inline-flex;
+  color: var(--accent);
+  filter: drop-shadow(0 0 4px var(--accent-glow));
+  animation: dance 0.55s ease-in-out infinite alternate;
+  transform-origin: center bottom;
+}
+
+.dancer-more {
+  font-size: 12px;
+  color: var(--text-dim);
+  align-self: center;
+  padding-left: 2px;
+}
+
+@keyframes dance {
+  0%   { transform: rotate(-14deg) translateY(0); }
+  100% { transform: rotate(14deg) translateY(-4px); }
+}
+
 

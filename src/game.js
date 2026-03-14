@@ -2,11 +2,11 @@
 // Manages keys, combos, currency, upgrades, and the offline song
 
 const KEY_TIERS = [
-  { tier: 1, keys: ['s'], unlockCost: 0 },
-  { tier: 2, keys: ['w', 'a', 'd'], unlockCost: 1 },
-  { tier: 3, keys: ['q', 'e'], unlockCost: 1 },
-  { tier: 4, keys: ['z', 'c'], unlockCost: 1 },
-  { tier: 5, keys: ['x'], unlockCost: 1 },
+  { tier: 1, keys: ['w'], unlockCost: 0 },
+  { tier: 2, keys: ['s'], unlockCost: 50 },
+  { tier: 3, keys: ['a', 'd'], unlockCost: 250 },
+  { tier: 4, keys: ['q', 'e', 'z', 'c'], unlockCost: 2500 },
+  { tier: 5, keys: ['x'], unlockCost: 25000 },
 ];
 
 const ALL_KEYS = KEY_TIERS.flatMap((t) => t.keys);
@@ -20,7 +20,7 @@ function createDefaultKeyState() {
   const keys = {};
   for (const key of ALL_KEYS) {
     keys[key] = {
-      unlocked: key === 's',
+      unlocked: key === 'w',
       level: 1,
       combo: 0,
       bestCombo: 0,
@@ -52,6 +52,10 @@ function createDefaultState() {
     },
     settings: {
       tolerancePercent: 12, // +/- % of beat interval
+    },
+    dancers: {
+      count: 0,
+      level: 1,
     },
   };
 }
@@ -162,6 +166,40 @@ function unlockTier(state) {
   return { state, success: true };
 }
 
+// --- Auto-Dancers ---
+function getDancerHireCost(count) {
+  return Math.floor(50 * Math.pow(2, count));
+}
+
+function getDancerUpgradeCost(level) {
+  if (level === 1) return 500;
+  if (level === 2) return 5000;
+  return Infinity;
+}
+
+function getDancerAccuracy(level) {
+  if (level >= 3) return 'perfect';
+  if (level >= 2) return 'good';
+  return 'ok';
+}
+
+function hireDancer(state) {
+  const cost = getDancerHireCost(state.dancers.count);
+  if (state.currency < cost) return { state, success: false };
+  state.currency -= cost;
+  state.dancers.count++;
+  return { state, success: true };
+}
+
+function upgradeDancers(state) {
+  if (state.dancers.level >= 3) return { state, success: false };
+  const cost = getDancerUpgradeCost(state.dancers.level);
+  if (state.currency < cost) return { state, success: false };
+  state.currency -= cost;
+  state.dancers.level++;
+  return { state, success: true };
+}
+
 // Calculate beat interval in ms from BPM
 function beatIntervalMs(bpm) {
   return 60000 / bpm;
@@ -189,6 +227,11 @@ if (typeof module !== 'undefined') {
     getTierUnlockCost,
     beatIntervalMs,
     isTapOnBeat,
+    getDancerHireCost,
+    getDancerUpgradeCost,
+    getDancerAccuracy,
+    hireDancer,
+    upgradeDancers,
     KEY_TIERS,
     ALL_KEYS,
     COMBO_THRESHOLDS,
@@ -207,6 +250,11 @@ if (typeof module !== 'undefined') {
     getTierUnlockCost,
     beatIntervalMs,
     isTapOnBeat,
+    getDancerHireCost,
+    getDancerUpgradeCost,
+    getDancerAccuracy,
+    hireDancer,
+    upgradeDancers,
     KEY_TIERS,
     ALL_KEYS,
     COMBO_THRESHOLDS,

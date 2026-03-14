@@ -37,6 +37,15 @@ let comboStreak = 0;
 let accuracyCounts = { perfect: 0, good: 0, ok: 0, miss: 0 };
 const PASSIVE_PER_BEAT = 0.1;
 
+// --- Dancers ---
+let dancerCooldowns = [];
+
+function syncDancerCooldowns() {
+  const count = state.dancers?.count ?? 0;
+  while (dancerCooldowns.length < count) dancerCooldowns.push(0);
+  dancerCooldowns.length = count;
+}
+
 // --- DOM ---
 const $ = (sel) => document.querySelector(sel);
 const currencyEl = $('#currency');
@@ -61,6 +70,13 @@ const sourcePickerOverlay = null;
 const sourceList = null;
 const sourceCancelBtn = null;
 
+const dancerFiguresEl = $('#dancer-figures');
+const hireDancerBtn = $('#hire-dancer-btn');
+const hireDancerCostEl = $('#dancer-hire-cost');
+const upgradeDancerBtn = $('#upgrade-dancer-btn');
+const upgradeDancerCostEl = $('#dancer-upgrade-cost');
+const dancerAccuracyLabelEl = $('#dancer-accuracy-label');
+
 // --- Helpers ---
 function formatNumber(n) {
   if (n < 1000) return Math.floor(n).toString();
@@ -77,7 +93,7 @@ function getUnlockedKeys() {
 // Lane order matches physical keyboard position left-to-right (QWERTY x-offsets)
 const LANE_ORDER = ['q', 'a', 'z', 'w', 's', 'x', 'e', 'd', 'c'];
 // Inline SVG arrows — one path rotated per direction, no overflow issues
-const KEY_ANGLE = { w: 0, d: 90, s: 180, a: 270, e: 45, c: 135, x: 180, z: 225, q: 315 };
+const KEY_ANGLE = { w: 0, d: 90, s: 180, a: 270, e: 45, c: 135, x: 0, z: 225, q: 315 };
 const KEY_COLOR = { a: '#ff4455', w: '#44dd77', s: '#4499ff', d: '#ffdd33', q: '#cc44ff', e: '#ff8833', z: '#ff44cc', x: '#aaddff', c: '#44ffcc' };
 const KEY_GLOW  = { a: 'rgba(255,68,85,0.9)', w: 'rgba(68,221,119,0.9)', s: 'rgba(68,153,255,0.9)', d: 'rgba(255,221,51,0.9)', q: 'rgba(204,68,255,0.9)', e: 'rgba(255,136,51,0.9)', z: 'rgba(255,68,204,0.9)', x: 'rgba(170,221,255,0.9)', c: 'rgba(68,255,204,0.9)' };
 const ARROW_PATH = 'M 50,5 L 95,50 L 68,50 L 68,95 L 32,95 L 32,50 L 5,50 Z';
@@ -126,6 +142,12 @@ async function startListening() {
 }
 
 async function startCapture() {
+  // If already listening, stop first before re-capturing
+  if (isListening) stopListening();
+
+  listenBtn.style.display = 'none';
+  beatCounterEl.textContent = 'Starting...';
+
   try {
     const stream = await navigator.mediaDevices.getDisplayMedia({
       video: true,
@@ -136,6 +158,8 @@ async function startCapture() {
 
     if (stream.getAudioTracks().length === 0) {
       console.error('No audio track in capture stream');
+      beatCounterEl.textContent = 'No audio — click Listen to retry';
+      listenBtn.style.display = '';
       return;
     }
 
@@ -152,7 +176,7 @@ async function startCapture() {
     energyHistory = [];
     lastOnsetTime = 0;
 
-    listenBtn.style.display = '';
+    listenBtn.style.display = 'none';
     stopBtn.style.display = '';
     beatCounterEl.textContent = 'Listening...';
 
@@ -160,7 +184,8 @@ async function startCapture() {
     if (!animFrameId) gameLoop();
   } catch (e) {
     console.error('Failed to capture audio:', e);
-    beatCounterEl.textContent = 'Capture failed — try again';
+    beatCounterEl.textContent = 'Capture failed — click Listen to retry';
+    listenBtn.style.display = '';
   }
 }
 
@@ -190,6 +215,10 @@ function stopListening() {
   stopBtn.style.display = 'none';
   vuFill.style.width = '0%';
   beatCounterEl.textContent = 'Stopped';
+
+  // Resume passive metronome
+  lastDefaultBeatTime = performance.now();
+  startDefaultLoop();
 }
 
 // --- Onset Detection ---
@@ -301,8 +330,20 @@ function gameLoop() {
     // Fade in as it approaches
     note.element.style.opacity = Math.min(1, progress * 2);
 
-    // Missed — past the hit zone by threshold
     const pastHitMs = now - note.hitTime;
+
+    // Dancer auto-hit — claim note as soon as it reaches the hit zone
+    if (pastHitMs >= 0 && state.dancers && state.dancers.count > 0) {
+      const di = dancerCooldowns.findIndex((cd) => cd <= now);
+      if (di !== -1) {
+        dancerCooldowns[di] = now + 400;
+        autoDancerHit(note);
+        activeNotes.splice(i, 1);
+        continue;
+      }
+    }
+
+    // Missed — past the hit zone by threshold
     if (pastHitMs > MISS_THRESHOLD_MS) {
       onNoteMiss(note);
       activeNotes.splice(i, 1);
@@ -390,6 +431,73 @@ function onKeyPress(key) {
   updateAccuracy();
 }
 
+// --- Stick Figures ---
+const STICK_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 90" width="20" height="20">
+  <circle cx="50" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="7"/>
+  <line x1="50" y1="22" x2="50" y2="54" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>
+  <line x1="50" y1="34" x2="26" y2="48" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>
+  <line x1="50" y1="34" x2="74" y2="48" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>
+  <line x1="50" y1="54" x2="32" y2="80" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>
+  <line x1="50" y1="54" x2="68" y2="80" stroke="currentColor" stroke-width="7" stroke-linecap="round"/>
+</svg>`;
+
+function updateDancerPanel() {
+  if (!state.dancers) return;
+  const { count, level } = state.dancers;
+
+  // Hire button
+  const hireCost = getDancerHireCost(count);
+  hireDancerCostEl.textContent = formatNumber(hireCost);
+  hireDancerBtn.disabled = state.currency < hireCost;
+
+  // Upgrade button
+  if (level >= 3) {
+    upgradeDancerBtn.style.display = 'none';
+  } else {
+    upgradeDancerBtn.style.display = '';
+    const upgradeCost = getDancerUpgradeCost(level);
+    upgradeDancerCostEl.textContent = formatNumber(upgradeCost);
+    upgradeDancerBtn.disabled = state.currency < upgradeCost;
+  }
+
+  // Accuracy label
+  const ACC_LABEL = { ok: 'OK', good: 'GOOD', perfect: 'PERFECT' };
+  const ACC_CLASS = { ok: 'acc-ok', good: 'acc-good', perfect: 'acc-perfect' };
+  const acc = getDancerAccuracy(level);
+  dancerAccuracyLabelEl.innerHTML = count > 0
+    ? `<span class="${ACC_CLASS[acc]}">${count} dancer${count !== 1 ? 's' : ''} &middot; ${ACC_LABEL[acc]}</span>`
+    : '<span class="hint">No dancers yet &mdash; hire one below</span>';
+
+  // Stick figures (cap at 20 visible)
+  const MAX_VISIBLE = 20;
+  const visible = Math.min(count, MAX_VISIBLE);
+  let html = '';
+  for (let i = 0; i < visible; i++) {
+    const delay = (i * 0.09).toFixed(2);
+    html += `<span class="dancer-figure" style="animation-delay:${delay}s">${STICK_SVG}</span>`;
+  }
+  if (count > MAX_VISIBLE) {
+    html += `<span class="dancer-more">+${count - MAX_VISIBLE}</span>`;
+  }
+  dancerFiguresEl.innerHTML = html;
+}
+
+function autoDancerHit(note) {
+  note.hit = true;
+  const accuracy = getDancerAccuracy(state.dancers.level);
+  note.element.classList.add('note-hit');
+  setTimeout(() => {
+    if (note.element.parentNode) note.element.parentNode.removeChild(note.element);
+  }, 150);
+  comboStreak++;
+  const result = processTap(state, note.key, accuracy);
+  showFeedback(accuracy, result.earned);
+  accuracyCounts[accuracy]++;
+  updateCurrency();
+  updateCombo();
+  updateAccuracy();
+}
+
 function onNoteMiss(note) {
   note.element.classList.add('note-miss');
   setTimeout(() => {
@@ -409,6 +517,19 @@ function onNoteMiss(note) {
 // --- UI ---
 function updateCurrency() {
   currencyEl.textContent = formatNumber(state.currency);
+
+  // Keep buttons enabled/disabled in sync with current currency
+  const nextTier = state.tierUnlocked + 1;
+  const nextTierDef = KEY_TIERS.find((t) => t.tier === nextTier);
+  if (nextTierDef) {
+    unlockTierBtn.disabled = state.currency < nextTierDef.unlockCost;
+  }
+  if (state.dancers) {
+    hireDancerBtn.disabled = state.currency < getDancerHireCost(state.dancers.count);
+    if (state.dancers.level < 3) {
+      upgradeDancerBtn.disabled = state.currency < getDancerUpgradeCost(state.dancers.level);
+    }
+  }
 }
 
 function updateCombo() {
@@ -527,6 +648,27 @@ unlockTierBtn.addEventListener('click', () => {
   }
 });
 
+hireDancerBtn.addEventListener('click', () => {
+  const result = hireDancer(state);
+  if (result.success) {
+    state = result.state;
+    syncDancerCooldowns();
+    updateCurrency();
+    updateDancerPanel();
+    updateUpgrades();
+  }
+});
+
+upgradeDancerBtn.addEventListener('click', () => {
+  const result = upgradeDancers(state);
+  if (result.success) {
+    state = result.state;
+    updateCurrency();
+    updateDancerPanel();
+    updateUpgrades();
+  }
+});
+
 // --- Save/Load ---
 async function saveGame() {
   await window.clicktrack.saveGame(state);
@@ -540,12 +682,18 @@ async function loadGame() {
 // --- Init ---
 async function init() {
   await loadGame();
+  if (!state.dancers) state.dancers = { count: 0, level: 1 };
+  syncDancerCooldowns();
   rebuildLanes();
   updateCurrency();
   updateUpgrades();
+  updateDancerPanel();
   updateStats();
   updateAccuracy();
   updateCombo();
+  // Show listen button immediately so user can always trigger capture
+  listenBtn.style.display = '';
+
   // Start default metronome immediately so notes appear right away,
   // then attempt to grab system audio in the background
   startDefaultLoop();
@@ -554,6 +702,7 @@ async function init() {
   saveInterval = setInterval(() => {
     saveGame();
     updateUpgrades();
+    updateDancerPanel();
     updateStats();
   }, 30000);
 }
