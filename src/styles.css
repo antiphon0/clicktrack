@@ -15,15 +15,18 @@
   --hit: #5cfc7c;
   --miss: #fc5c5c;
   --gold: #fcd05c;
+  --perfect: #5cfc7c;
+  --good: #5cc8fc;
+  --ok: #fcd05c;
 }
 
 body {
   background: var(--bg);
   color: var(--text);
   font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-  overflow: hidden;
   height: 100vh;
   user-select: none;
+  overflow: hidden;
 }
 
 #app {
@@ -34,6 +37,11 @@ body {
   gap: 16px;
   height: 100vh;
   overflow-y: auto;
+  transition: background 0.15s;
+}
+
+#app.pulse {
+  background: rgba(124, 92, 252, 0.04);
 }
 
 /* Header */
@@ -80,66 +88,33 @@ body {
   margin-bottom: 12px;
 }
 
-/* Now Playing */
-#now-playing {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-#track-info {
+/* Audio Status */
+#status-row {
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
-#album-art-container {
-  width: 48px;
-  height: 48px;
+#vu-meter {
+  flex: 1;
+  height: 8px;
+  background: var(--border);
   border-radius: 4px;
   overflow: hidden;
-  background: var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
 }
 
-#album-art-placeholder {
-  font-size: 24px;
-  color: var(--text-dim);
-}
-
-#album-art {
-  width: 100%;
+#vu-fill {
   height: 100%;
-  object-fit: cover;
+  width: 0%;
+  background: linear-gradient(90deg, var(--accent), var(--hit));
+  border-radius: 4px;
+  transition: width 0.05s;
 }
 
-#track-name {
-  font-size: 14px;
-  font-weight: 500;
-}
-
-#track-artist {
+.hint {
   font-size: 12px;
   color: var(--text-dim);
-}
-
-#bpm-display {
-  font-size: 12px;
-  color: var(--accent);
-  margin-top: 2px;
-}
-
-#bpm-value {
-  font-weight: 700;
-  font-size: 16px;
-}
-
-#mode-label {
-  color: var(--text-dim);
-  font-size: 11px;
+  white-space: nowrap;
 }
 
 /* Buttons */
@@ -153,121 +128,220 @@ body {
   font-size: 13px;
   font-weight: 500;
   transition: opacity 0.15s;
+  white-space: nowrap;
 }
 
-.btn:hover {
-  opacity: 0.85;
-}
-
-.btn:disabled {
-  opacity: 0.3;
-  cursor: default;
-}
+.btn:hover { opacity: 0.85; }
+.btn:disabled { opacity: 0.3; cursor: default; }
 
 .btn-small {
   padding: 4px 10px;
   font-size: 11px;
 }
 
-/* Beat Grid */
-#beat-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 8px 0;
-}
-
-.key-row {
-  display: flex;
-  gap: 6px;
-  justify-content: center;
-}
-
-.key {
-  width: 72px;
-  height: 72px;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 20px;
-  font-weight: 700;
-  background: var(--panel);
-  border: 2px solid var(--border);
-  transition: all 0.08s;
-  position: relative;
-}
-
-.key.active {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.key.locked {
-  opacity: 0.2;
+.btn-secondary {
+  background: var(--border);
   color: var(--text-dim);
 }
 
-.key.hit {
-  background: var(--accent);
-  color: white;
-  border-color: var(--accent);
-  box-shadow: 0 0 20px var(--accent-glow);
-  transform: scale(0.92);
+.btn-secondary:hover {
+  background: #2a2a3a;
+  color: var(--text);
 }
 
-.key.miss {
-  border-color: var(--miss);
-  background: rgba(252, 92, 92, 0.15);
-}
-
-.key.on-beat {
-  border-color: var(--accent);
-  box-shadow: 0 0 12px var(--accent-glow);
-}
-
-/* Beat Pulse */
-#beat-pulse {
+/* Note Track */
+#note-track {
   position: relative;
-  width: 40px;
-  height: 40px;
-  margin: 4px 0;
+  width: 100%;
+  max-width: 600px;
+  height: 340px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
 }
 
-#beat-ring {
+#lanes-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 50px; /* leave room for hit zone + labels */
+  display: flex;
+}
+
+.lane {
+  flex: 1;
+  position: relative;
+  border-right: 1px solid rgba(30, 30, 46, 0.6);
+}
+
+.lane:last-child {
+  border-right: none;
+}
+
+.lane-flash {
+  background: rgba(124, 92, 252, 0.2) !important;
+  transition: background 0s;
+}
+
+.lane:not(.lane-flash) {
+  transition: background 0.15s;
+}
+
+/* Hit zone */
+#hit-zone {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 50px;
+}
+
+#hit-zone-line {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow), 0 0 24px var(--accent-glow);
+}
+
+#lane-labels {
+  display: flex;
+  position: absolute;
+  top: 8px;
+  left: 0;
+  right: 0;
+  height: 38px;
+}
+
+.lane-label {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  transition: all 0.12s;
+}
+
+.lane-label.label-hit {
+  color: white;
+  background: var(--key-color, var(--accent));
+  border-radius: 6px;
+  text-shadow: 0 0 16px var(--key-glow, var(--accent-glow));
+  transform: scale(1.2);
+  box-shadow: 0 0 20px var(--key-glow, var(--accent-glow));
+}
+
+/* Notes — transparent container; shape comes from arrow children */
+.note {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 64px;
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.1s;
+  pointer-events: none;
+  z-index: 2;
+}
+
+/* Per-key color variables (used for label-hit flash) */
+.note-key-a, .lane-label-key-a { --key-color: #ff4455; --key-glow: rgba(255,68,85,0.6); }
+.note-key-w, .lane-label-key-w { --key-color: #44dd77; --key-glow: rgba(68,221,119,0.6); }
+.note-key-s, .lane-label-key-s { --key-color: #4499ff; --key-glow: rgba(68,153,255,0.6); }
+.note-key-d, .lane-label-key-d { --key-color: #ffdd33; --key-glow: rgba(255,221,51,0.6); }
+.note-key-q, .lane-label-key-q { --key-color: #cc44ff; --key-glow: rgba(204,68,255,0.6); }
+.note-key-e, .lane-label-key-e { --key-color: #ff8833; --key-glow: rgba(255,136,51,0.6); }
+.note-key-z, .lane-label-key-z { --key-color: #ff44cc; --key-glow: rgba(255,68,204,0.6); }
+.note-key-x, .lane-label-key-x { --key-color: #aaddff; --key-glow: rgba(170,221,255,0.6); }
+.note-key-c, .lane-label-key-c { --key-color: #44ffcc; --key-glow: rgba(68,255,204,0.6); }
+
+/* Style 4 — clip-path hollow arrow outline */
+.arrow-wrap {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  flex-shrink: 0;
+}
+
+.arrow-outer,
+.arrow-inner {
   position: absolute;
   inset: 0;
-  border: 2px solid var(--accent);
-  border-radius: 50%;
-  opacity: 0.3;
-  transition: all 0.1s;
+  width: 52px;
+  height: 52px;
 }
 
-#beat-dot {
-  position: absolute;
-  width: 12px;
-  height: 12px;
-  background: var(--accent);
-  border-radius: 50%;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  transition: all 0.08s;
+/* Arrow clip-paths */
+.arrow-up    { clip-path: polygon(50% 0%, 100% 50%, 72% 50%, 72% 100%, 28% 100%, 28% 50%, 0% 50%); }
+.arrow-down  { clip-path: polygon(50% 100%, 100% 50%, 72% 50%, 72% 0%,  28% 0%,  28% 50%, 0% 50%); }
+.arrow-left  { clip-path: polygon(0% 50%, 50% 0%,  50% 28%, 100% 28%, 100% 72%, 50% 72%, 50% 100%); }
+.arrow-right { clip-path: polygon(100% 50%, 50% 0%, 50% 28%, 0% 28%,  0% 72%,  50% 72%, 50% 100%); }
+
+/* Inner dark cutout — slightly smaller, same clip shape */
+.arrow-inner { background: #0d0d14 !important; inset: 5px; width: calc(100% - 10px); height: calc(100% - 10px); }
+
+/* Per-key outer fill colors */
+.note-key-a .arrow-outer, .lane-label-key-a .arrow-outer { background: #ff4455; filter: drop-shadow(0 0 6px rgba(255,68,85,0.9)); }
+.note-key-w .arrow-outer, .lane-label-key-w .arrow-outer { background: #44dd77; filter: drop-shadow(0 0 6px rgba(68,221,119,0.9)); }
+.note-key-s .arrow-outer, .lane-label-key-s .arrow-outer { background: #4499ff; filter: drop-shadow(0 0 6px rgba(68,153,255,0.9)); }
+.note-key-d .arrow-outer, .lane-label-key-d .arrow-outer { background: #ffdd33; filter: drop-shadow(0 0 6px rgba(255,221,51,0.9)); }
+.note-key-q .arrow-outer, .lane-label-key-q .arrow-outer { background: #cc44ff; filter: drop-shadow(0 0 6px rgba(204,68,255,0.9)); }
+.note-key-e .arrow-outer, .lane-label-key-e .arrow-outer { background: #ff8833; filter: drop-shadow(0 0 6px rgba(255,136,51,0.9)); }
+.note-key-z .arrow-outer, .lane-label-key-z .arrow-outer { background: #ff44cc; filter: drop-shadow(0 0 6px rgba(255,68,204,0.9)); }
+.note-key-x .arrow-outer, .lane-label-key-x .arrow-outer { background: #aaddff; filter: drop-shadow(0 0 6px rgba(170,221,255,0.9)); }
+.note-key-c .arrow-outer, .lane-label-key-c .arrow-outer { background: #44ffcc; filter: drop-shadow(0 0 6px rgba(68,255,204,0.9)); }
+
+/* Smaller arrows for lane labels */
+.arrow-wrap.label-arrow {
+  width: 38px;
+  height: 38px;
+}
+.label-arrow .arrow-outer,
+.label-arrow .arrow-inner {
+  width: 38px;
+  height: 38px;
+}
+.label-arrow .arrow-inner {
+  inset: 4px;
+  width: calc(100% - 8px);
+  height: calc(100% - 8px);
 }
 
-#beat-pulse.pulse #beat-ring {
-  transform: scale(1.5);
-  opacity: 0;
+/* Note hit/miss states — flash the outer arrow */
+.note-hit .arrow-outer {
+  background: var(--hit) !important;
+  filter: drop-shadow(0 0 12px rgba(92,252,124,0.9)) !important;
+}
+.note-hit {
+  transform: translateX(-50%) scale(1.3);
+  opacity: 0 !important;
+  transition: transform 0.15s, opacity 0.15s;
 }
 
-#beat-pulse.pulse #beat-dot {
-  transform: translate(-50%, -50%) scale(1.3);
-  box-shadow: 0 0 16px var(--accent-glow);
+.note-miss .arrow-outer {
+  background: var(--miss) !important;
+  filter: none !important;
+}
+.note-miss {
+  opacity: 0.25 !important;
+  transition: opacity 0.2s;
 }
 
 /* Feedback */
 #feedback {
   text-align: center;
+  width: 100%;
+  max-width: 600px;
 }
 
 #combo-display {
@@ -276,7 +350,7 @@ body {
 }
 
 #combo-count {
-  font-size: 28px;
+  font-size: 32px;
   font-weight: 700;
   color: var(--text);
   font-variant-numeric: tabular-nums;
@@ -288,14 +362,29 @@ body {
 }
 
 #tap-feedback {
-  height: 20px;
-  font-size: 14px;
+  height: 24px;
+  font-size: 16px;
+  font-weight: 700;
+  margin: 4px 0;
+}
+
+.feedback-perfect { color: var(--perfect); }
+.feedback-good { color: var(--good); }
+.feedback-ok { color: var(--ok); }
+.feedback-miss { color: var(--miss); }
+
+#accuracy-display {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  font-size: 13px;
   font-weight: 600;
 }
 
-.feedback-hit { color: var(--hit); }
-.feedback-miss { color: var(--miss); }
-.feedback-bonus { color: var(--gold); font-size: 18px; }
+.acc-perfect { color: var(--perfect); }
+.acc-good { color: var(--good); }
+.acc-ok { color: var(--ok); }
+.acc-miss { color: var(--miss); }
 
 /* Upgrades */
 #key-upgrades {
@@ -350,27 +439,77 @@ body {
 
 .stat-value {
   font-weight: 600;
-  color: var(--text);
   font-variant-numeric: tabular-nums;
 }
 
-/* Per-key combo badge */
-.key-combo {
-  position: absolute;
-  bottom: 2px;
-  right: 4px;
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--gold);
-  pointer-events: none;
+/* Source Picker Modal */
+#source-picker-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.75);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
 }
 
-/* Clickable keys */
-.key.active {
+#source-picker {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  width: 560px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+#source-picker h2 {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+#source-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  overflow-y: auto;
+  max-height: 50vh;
+}
+
+.source-item {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
   cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  transition: border-color 0.15s, background 0.15s;
 }
 
-.stat-value {
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
+.source-item:hover {
+  border-color: var(--accent);
+  background: rgba(124, 92, 252, 0.08);
+}
+
+.source-item img {
+  width: 100%;
+  aspect-ratio: 16/10;
+  object-fit: cover;
+  border-radius: 4px;
+  background: #000;
+}
+
+.source-item span {
+  font-size: 12px;
+  color: var(--text-dim);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
 }

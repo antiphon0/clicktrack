@@ -8,7 +8,6 @@
 </head>
 <body>
   <div id="app">
-    <!-- Header -->
     <header id="header">
       <h1>CLICKTRACK</h1>
       <div id="currency-display">
@@ -16,66 +15,53 @@
       </div>
     </header>
 
-    <!-- Now Playing -->
-    <div id="now-playing" class="panel">
-      <div id="track-info">
-        <div id="album-art-container">
-          <div id="album-art-placeholder">♪</div>
-          <img id="album-art" style="display:none" alt="Album art">
+    <!-- Audio Status -->
+    <div id="audio-status" class="panel">
+      <div id="status-row">
+        <button id="listen-btn" class="btn">&#127925; Listen</button>
+        <button id="stop-btn" class="btn btn-secondary" style="display:none;">&#9632; Stop</button>
+        <div id="vu-meter">
+          <div id="vu-fill"></div>
         </div>
-        <div id="track-details">
-          <div id="track-name">No song playing</div>
-          <div id="track-artist"></div>
-          <div id="bpm-display">
-            <span id="bpm-value">--</span> BPM
-            <span id="mode-label">(offline song)</span>
-          </div>
+        <span id="beat-counter" class="hint">Play some music and click Listen</span>
+      </div>
+    </div>
+
+    <!-- Note Track (Guitar Hero style) -->
+    <div id="note-track">
+      <div id="lanes-container">
+        <!-- lanes + notes generated dynamically -->
+      </div>
+      <div id="hit-zone">
+        <div id="hit-zone-line"></div>
+        <div id="lane-labels">
+          <!-- key labels generated dynamically -->
         </div>
       </div>
-      <button id="spotify-connect" class="btn">Connect Spotify</button>
     </div>
 
-    <!-- Beat Grid -->
-    <div id="beat-grid">
-      <div class="key-row">
-        <div class="key locked" data-key="q">Q</div>
-        <div class="key locked" data-key="w">W</div>
-        <div class="key locked" data-key="e">E</div>
-      </div>
-      <div class="key-row">
-        <div class="key locked" data-key="a">A</div>
-        <div class="key active" data-key="s">S</div>
-        <div class="key locked" data-key="d">D</div>
-      </div>
-      <div class="key-row">
-        <div class="key locked" data-key="z">Z</div>
-        <div class="key locked" data-key="x">X</div>
-        <div class="key locked" data-key="c">C</div>
-      </div>
-    </div>
-
-    <!-- Beat Pulse Indicator -->
-    <div id="beat-pulse">
-      <div id="beat-ring"></div>
-      <div id="beat-dot"></div>
-    </div>
-
-    <!-- Combo & Feedback -->
+    <!-- Feedback -->
     <div id="feedback">
       <div id="combo-display">
         <span id="combo-count">0</span>x combo
-        <span id="combo-mult">×1</span>
+        <span id="combo-mult">&times;1</span>
       </div>
       <div id="tap-feedback"></div>
+      <div id="accuracy-display">
+        <span class="acc-perfect"><span id="perfect-count">0</span> perfect</span>
+        <span class="acc-good"><span id="good-count">0</span> good</span>
+        <span class="acc-ok"><span id="ok-count">0</span> ok</span>
+        <span class="acc-miss"><span id="miss-count">0</span> miss</span>
+      </div>
     </div>
 
-    <!-- Upgrades Panel -->
+    <!-- Upgrades -->
     <div id="upgrades" class="panel">
       <h2>Upgrades</h2>
       <div id="key-upgrades"></div>
       <div id="tier-unlock">
         <button id="unlock-tier-btn" class="btn">
-          Unlock next tier — <span id="tier-cost"></span> beats
+          Unlock next tier &mdash; <span id="tier-cost"></span> beats
         </button>
       </div>
     </div>
@@ -87,8 +73,18 @@
     </div>
   </div>
 
+    <!-- Source Picker Modal -->
+    <div id="source-picker-overlay" style="display:none;">
+      <div id="source-picker">
+        <h2>Select Audio Source</h2>
+        <p class="hint">Choose a screen or window to listen to</p>
+        <div id="source-list"></div>
+        <button id="source-cancel-btn" class="btn btn-secondary">Cancel</button>
+      </div>
+    </div>
+  </div>
+
   <script src="game.js"></script>
-  <script src="spotify.js"></script>
   <script src="renderer.js"></script>
 </body>
 </html>

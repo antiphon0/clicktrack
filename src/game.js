@@ -3,10 +3,10 @@
 
 const KEY_TIERS = [
   { tier: 1, keys: ['s'], unlockCost: 0 },
-  { tier: 2, keys: ['w', 'a', 'd'], unlockCost: 100 },
-  { tier: 3, keys: ['q', 'e'], unlockCost: 1000 },
-  { tier: 4, keys: ['z', 'c'], unlockCost: 10000 },
-  { tier: 5, keys: ['x'], unlockCost: 100000 },
+  { tier: 2, keys: ['w', 'a', 'd'], unlockCost: 1 },
+  { tier: 3, keys: ['q', 'e'], unlockCost: 1 },
+  { tier: 4, keys: ['z', 'c'], unlockCost: 1 },
+  { tier: 5, keys: ['x'], unlockCost: 1 },
 ];
 
 const ALL_KEYS = KEY_TIERS.flatMap((t) => t.keys);
@@ -82,8 +82,10 @@ function getTierUnlockCost(tier) {
   return tierDef ? tierDef.unlockCost : Infinity;
 }
 
-// Process a successful tap on a key
-function processTap(state, key) {
+const ACCURACY_MULTIPLIERS = { perfect: 1.0, good: 0.75, ok: 0.5 };
+
+// Process a successful tap on a key with accuracy tier
+function processTap(state, key, accuracy = 'perfect') {
   const keyState = state.keys[key];
   if (!keyState || !keyState.unlocked) return { state, earned: 0 };
 
@@ -92,7 +94,8 @@ function processTap(state, key) {
 
   const baseValue = getKeyValue(state, key);
   const comboMult = getComboMultiplier(keyState.combo);
-  let earned = baseValue * comboMult;
+  const accuracyMult = ACCURACY_MULTIPLIERS[accuracy] || 1;
+  let earned = baseValue * comboMult * accuracyMult;
 
   // Check combo threshold bonuses
   if (COMBO_THRESHOLDS.includes(keyState.combo)) {
@@ -170,26 +173,40 @@ function isTapOnBeat(tapTime, beatOrigin, bpm, tolerancePercent) {
   return offset <= tolerance || offset >= interval - tolerance;
 }
 
-const _gameExports = {
-  createDefaultState,
-  processTap,
-  processMiss,
-  upgradeKey,
-  unlockTier,
-  getKeyUpgradeCost,
-  getKeyValue,
-  getComboMultiplier,
-  getTierUnlockCost,
-  beatIntervalMs,
-  isTapOnBeat,
-  KEY_TIERS,
-  ALL_KEYS,
-  COMBO_THRESHOLDS,
-};
-
-if (typeof module !== 'undefined' && module.exports) {
-  module.exports = _gameExports;
-}
-if (typeof window !== 'undefined') {
-  window.Game = _gameExports;
+if (typeof module !== 'undefined') {
+  module.exports = {
+    createDefaultState,
+    processTap,
+    processMiss,
+    upgradeKey,
+    unlockTier,
+    getKeyUpgradeCost,
+    getKeyValue,
+    getComboMultiplier,
+    getTierUnlockCost,
+    beatIntervalMs,
+    isTapOnBeat,
+    KEY_TIERS,
+    ALL_KEYS,
+    COMBO_THRESHOLDS,
+    ACCURACY_MULTIPLIERS,
+  };
+} else if (typeof window !== 'undefined') {
+  Object.assign(window, {
+    createDefaultState,
+    processTap,
+    processMiss,
+    upgradeKey,
+    unlockTier,
+    getKeyUpgradeCost,
+    getKeyValue,
+    getComboMultiplier,
+    getTierUnlockCost,
+    beatIntervalMs,
+    isTapOnBeat,
+    KEY_TIERS,
+    ALL_KEYS,
+    COMBO_THRESHOLDS,
+    ACCURACY_MULTIPLIERS,
+  });
 }
