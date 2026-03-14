@@ -77,9 +77,9 @@ function getUnlockedKeys() {
 // Lane order matches physical keyboard position left-to-right (QWERTY x-offsets)
 const LANE_ORDER = ['q', 'a', 'z', 'w', 's', 'x', 'e', 'd', 'c'];
 const KEY_ARROWS = { q: '↖', w: '↑', e: '↗', a: '←', s: '↓', d: '→', z: '↙', x: '⬇', c: '↘' };
-// Map each key to a base direction + rotation for the clip-path arrow shape
-const KEY_DIR = { w: 'up', s: 'down', a: 'left', d: 'right', q: 'up', e: 'up', z: 'down', x: 'down', c: 'down' };
-const KEY_ROT = { w: 0, s: 0, a: 0, d: 0, q: -45, e: 45, z: -45, x: 0, c: 45 };
+// Map each key to a clip-path arrow direction (diagonals have their own shapes — no rotation needed)
+const KEY_DIR = { w: 'up', s: 'down', a: 'left', d: 'right', q: 'upleft', e: 'upright', z: 'downleft', x: 'down', c: 'downright' };
+const KEY_ROT = {};
 
 function createArrowEl(key) {
   const dir = KEY_DIR[key] || 'up';
@@ -180,11 +180,12 @@ async function startCapture() {
     energyHistory = [];
     lastOnsetTime = 0;
 
-    listenBtn.style.display = 'none';
+    listenBtn.style.display = '';
     stopBtn.style.display = '';
     beatCounterEl.textContent = 'Listening...';
 
-    gameLoop();
+    // gameLoop may already be running from startDefaultLoop — don't double-start
+    if (!animFrameId) gameLoop();
   } catch (e) {
     console.error('Failed to capture audio:', e);
     beatCounterEl.textContent = 'Capture failed — try again';
@@ -355,7 +356,6 @@ function flashLane(key) {
 }
 
 function onKeyPress(key) {
-  if (!isListening) return;
   if (!state.keys[key]?.unlocked) return;
 
   // Visual feedback on every press
@@ -496,7 +496,8 @@ function showFeedback(type, earned) {
 }
 
 // --- Events ---
-listenBtn.addEventListener('click', startListening);
+// Listen btn = pick a different source
+listenBtn.addEventListener('click', openSourcePicker);
 stopBtn.addEventListener('click', stopListening);
 
 document.addEventListener('keydown', (e) => {
@@ -512,7 +513,7 @@ document.addEventListener('keydown', (e) => {
 
   const key = KEY_MAP[e.code] || KEY_MAP[e.key] || e.key.toLowerCase();
 
-  if (ALL_KEYS.includes(key) && isListening) {
+  if (ALL_KEYS.includes(key)) {
     e.preventDefault();
     onKeyPress(key);
   }
@@ -559,7 +560,10 @@ async function init() {
   updateStats();
   updateAccuracy();
   updateCombo();
+  // Start default metronome immediately so notes appear right away,
+  // then attempt to grab system audio in the background
   startDefaultLoop();
+  startCapture();
 
   saveInterval = setInterval(() => {
     saveGame();

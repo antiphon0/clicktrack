@@ -265,30 +265,37 @@ body {
 .note-key-x, .lane-label-key-x { --key-color: #aaddff; --key-glow: rgba(170,221,255,0.6); }
 .note-key-c, .lane-label-key-c { --key-color: #44ffcc; --key-glow: rgba(68,255,204,0.6); }
 
-/* Style 4 — clip-path hollow arrow outline */
+/* Arrow shape — solid filled, clip-path */
 .arrow-wrap {
   position: relative;
-  width: 52px;
-  height: 52px;
+  width: 100%;
+  height: 100%;
   flex-shrink: 0;
 }
 
-.arrow-outer,
-.arrow-inner {
+/* note IS the arrow-wrap, so .note controls position/size */
+.note.arrow-wrap { display: block; }
+
+.arrow-outer {
   position: absolute;
   inset: 0;
-  width: 52px;
-  height: 52px;
+  width: 100%;
+  height: 100%;
 }
 
-/* Arrow clip-paths */
-.arrow-up    { clip-path: polygon(50% 0%, 100% 50%, 72% 50%, 72% 100%, 28% 100%, 28% 50%, 0% 50%); }
-.arrow-down  { clip-path: polygon(50% 100%, 100% 50%, 72% 50%, 72% 0%,  28% 0%,  28% 50%, 0% 50%); }
-.arrow-left  { clip-path: polygon(0% 50%, 50% 0%,  50% 28%, 100% 28%, 100% 72%, 50% 72%, 50% 100%); }
-.arrow-right { clip-path: polygon(100% 50%, 50% 0%, 50% 28%, 0% 28%,  0% 72%,  50% 72%, 50% 100%); }
+/* clip-path shapes — cardinal */
+.arrow-up    { clip-path: polygon(50% 5%, 95% 52%, 68% 52%, 68% 95%, 32% 95%, 32% 52%, 5% 52%); }
+.arrow-down  { clip-path: polygon(50% 95%, 95% 48%, 68% 48%, 68% 5%,  32% 5%,  32% 48%, 5% 48%); }
+.arrow-left  { clip-path: polygon(5% 50%, 52% 5%,  52% 32%, 95% 32%, 95% 68%, 52% 68%, 52% 95%); }
+.arrow-right { clip-path: polygon(95% 50%, 48% 5%, 48% 32%, 5% 32%,  5% 68%,  48% 68%, 48% 95%); }
+/* clip-path shapes — diagonal (no rotation needed, stays within bounding box) */
+.arrow-upleft   { clip-path: polygon(5% 5%, 5% 50%, 25% 30%, 70% 75%, 75% 70%, 30% 25%, 50% 5%); }
+.arrow-upright  { clip-path: polygon(95% 5%, 50% 5%, 70% 25%, 25% 70%, 30% 75%, 75% 30%, 95% 50%); }
+.arrow-downleft { clip-path: polygon(5% 95%, 50% 95%, 30% 75%, 75% 30%, 70% 25%, 25% 70%, 5% 50%); }
+.arrow-downright{ clip-path: polygon(95% 95%, 95% 50%, 75% 70%, 30% 25%, 25% 30%, 70% 75%, 50% 95%); }
 
-/* Inner dark cutout — slightly smaller, same clip shape */
-.arrow-inner { background: #0d0d14 !important; inset: 5px; width: calc(100% - 10px); height: calc(100% - 10px); }
+/* No inner cutout — keep solid, use border-style outline effect via drop-shadow */
+.arrow-inner { display: none; }
 
 /* Per-key outer fill colors */
 .note-key-a .arrow-outer, .lane-label-key-a .arrow-outer { background: #ff4455; filter: drop-shadow(0 0 6px rgba(255,68,85,0.9)); }
@@ -446,7 +453,7 @@ body {
 #source-picker-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.75);
+  background: rgba(0, 0, 0, 0.82);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -456,56 +463,59 @@ body {
 #source-picker {
   background: var(--panel);
   border: 1px solid var(--border);
-  border-radius: 12px;
-  padding: 24px;
-  width: 560px;
-  max-height: 80vh;
+  border-radius: 10px;
+  padding: 20px;
+  width: 480px;
+  max-width: 92vw;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
 }
 
 #source-picker h2 {
-  font-size: 18px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
 }
 
 #source-list {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
   overflow-y: auto;
-  max-height: 50vh;
+  max-height: 340px;
 }
 
 .source-item {
   background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  padding: 6px;
   cursor: pointer;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  transition: border-color 0.15s, background 0.15s;
+  gap: 5px;
+  transition: border-color 0.12s, background 0.12s;
 }
 
 .source-item:hover {
   border-color: var(--accent);
-  background: rgba(124, 92, 252, 0.08);
+  background: rgba(124, 92, 252, 0.1);
 }
 
 .source-item img {
   width: 100%;
   aspect-ratio: 16/10;
   object-fit: cover;
-  border-radius: 4px;
+  border-radius: 3px;
   background: #000;
 }
 
 .source-item span {
-  font-size: 12px;
+  font-size: 10px;
   color: var(--text-dim);
   text-align: center;
   white-space: nowrap;

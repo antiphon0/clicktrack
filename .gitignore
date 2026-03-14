@@ -3,3 +3,11 @@ dist/
 out/
 *.log
 .env
+.hintrc
+arrow-demo.html
+clicktrack/
+src/analyzer.js
+src/audio-engine.js
+src/db.js
+src/dj.js
+src/spotify-api.js
