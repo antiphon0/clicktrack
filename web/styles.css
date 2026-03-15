@@ -29,14 +29,14 @@ body {
   overflow: hidden;
 }
 
+/* ===== Desktop two-column layout ===== */
 #app {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 20px;
+  display: grid;
+  grid-template-columns: 1fr 340px;
   gap: 16px;
+  padding: 16px;
   height: 100vh;
-  overflow-y: auto;
+  overflow: hidden;
   transition: background 0.15s;
 }
 
@@ -44,13 +44,35 @@ body {
   background: none;
 }
 
+#play-column {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0; /* allow shrinking in grid */
+}
+
+#side-column {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+  min-height: 0;
+  padding-right: 4px;
+}
+
+/* Scrollbar for side column */
+#side-column::-webkit-scrollbar { width: 6px; }
+#side-column::-webkit-scrollbar-track { background: transparent; }
+#side-column::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+#side-column::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
 /* Header */
 #header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   width: 100%;
-  max-width: 600px;
+  flex-shrink: 0;
 }
 
 #header h1 {
@@ -61,7 +83,7 @@ body {
 }
 
 #currency-display {
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 600;
 }
 
@@ -77,7 +99,6 @@ body {
   border-radius: 8px;
   padding: 16px;
   width: 100%;
-  max-width: 600px;
 }
 
 .panel h2 {
@@ -89,6 +110,10 @@ body {
 }
 
 /* Audio Status */
+#audio-status {
+  flex-shrink: 0;
+}
+
 #status-row {
   display: flex;
   align-items: center;
@@ -122,21 +147,31 @@ body {
   background: var(--accent);
   color: white;
   border: none;
-  padding: 8px 16px;
-  border-radius: 6px;
+  padding: 10px 20px;
+  border-radius: 8px;
   cursor: pointer;
-  font-size: 13px;
-  font-weight: 500;
-  transition: opacity 0.15s;
+  font-size: 14px;
+  font-weight: 600;
+  transition: transform 0.1s, box-shadow 0.15s, opacity 0.15s;
   white-space: nowrap;
 }
 
-.btn:hover { opacity: 0.85; }
-.btn:disabled { opacity: 0.3; cursor: default; }
+.btn:hover {
+  opacity: 0.9;
+  box-shadow: 0 0 16px var(--accent-glow);
+  transform: translateY(-1px);
+}
+
+.btn:active {
+  transform: translateY(1px) scale(0.97);
+  box-shadow: none;
+}
+
+.btn:disabled { opacity: 0.3; cursor: default; transform: none; box-shadow: none; }
 
 .btn-small {
-  padding: 4px 10px;
-  font-size: 11px;
+  padding: 6px 14px;
+  font-size: 13px;
 }
 
 .btn-secondary {
@@ -147,14 +182,15 @@ body {
 .btn-secondary:hover {
   background: #2a2a3a;
   color: var(--text);
+  box-shadow: none;
 }
 
-/* Note Track */
+/* Note Track - fills remaining play-column height */
 #note-track {
   position: relative;
   width: 100%;
-  max-width: 600px;
-  height: 500px;
+  flex: 1;
+  min-height: 300px;
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -301,7 +337,7 @@ body {
 #feedback {
   text-align: center;
   width: 100%;
-  max-width: 600px;
+  flex-shrink: 0;
 }
 
 #combo-display {
@@ -349,31 +385,87 @@ body {
 /* Upgrades */
 #key-upgrades {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 6px;
 }
 
 .key-upgrade {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 10px;
-  min-width: 140px;
+  border-radius: 8px;
+  padding: 10px 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
+}
+
+.key-upgrade:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 12px var(--accent-glow);
+  transform: translateX(2px);
+}
+
+.key-upgrade:active {
+  transform: scale(0.97);
 }
 
 .key-upgrade-label {
   font-weight: 700;
-  font-size: 14px;
+  font-size: 18px;
   color: var(--accent);
-  width: 20px;
+  width: 28px;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.key-upgrade-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
 .key-upgrade-level {
-  font-size: 12px;
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.key-upgrade-cost {
+  font-size: 11px;
   color: var(--text-dim);
+}
+
+.key-upgrade-action {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--text-dim);
+  padding: 4px 10px;
+  border-radius: 4px;
+  background: var(--border);
+}
+
+.key-upgrade.affordable .key-upgrade-action {
+  color: var(--bg);
+  background: var(--accent);
+}
+
+.key-upgrade.affordable {
+  cursor: pointer;
+}
+
+.key-upgrade:not(.affordable) {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.key-upgrade:not(.affordable):hover {
+  border-color: var(--border);
+  box-shadow: none;
+  transform: none;
 }
 
 #tier-unlock {

@@ -555,16 +555,28 @@ function updateUpgrades() {
   for (const key of getUnlockedKeys()) {
     const ks = state.keys[key];
     const cost = getKeyUpgradeCost(ks.level);
+    const canAfford = state.currency >= cost;
     const div = document.createElement('div');
-    div.className = 'key-upgrade';
+    div.className = 'key-upgrade' + (canAfford ? ' affordable' : '');
+    div.dataset.key = key;
     div.innerHTML = `
       <span class="key-upgrade-label">${key.toUpperCase()}</span>
-      <span class="key-upgrade-level">Lv.${ks.level}</span>
-      <button class="btn btn-small upgrade-btn" data-key="${key}"
-        ${state.currency < cost ? 'disabled' : ''}>
-        \u2191 ${formatNumber(cost)}
-      </button>
+      <span class="key-upgrade-info">
+        <span class="key-upgrade-level">Level ${ks.level}</span>
+        <span class="key-upgrade-cost">${formatNumber(cost)} beats</span>
+      </span>
+      <span class="key-upgrade-action">${canAfford ? 'UPGRADE' : '\u{1F512}'}</span>
     `;
+    if (canAfford) {
+      div.addEventListener('click', () => {
+        const result = upgradeKey(state, key);
+        if (result.success) {
+          state = result.state;
+          updateCurrency();
+          updateUpgrades();
+        }
+      });
+    }
     keyUpgradesEl.appendChild(div);
   }
 
@@ -637,18 +649,6 @@ document.addEventListener('keydown', (e) => {
   if (ALL_KEYS.includes(key)) {
     e.preventDefault();
     onKeyPress(key);
-  }
-});
-
-keyUpgradesEl.addEventListener('click', (e) => {
-  const btn = e.target.closest('.upgrade-btn');
-  if (!btn) return;
-  const key = btn.dataset.key;
-  const result = upgradeKey(state, key);
-  if (result.success) {
-    state = result.state;
-    updateCurrency();
-    updateUpgrades();
   }
 });
 
