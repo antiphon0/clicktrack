@@ -96,20 +96,60 @@ const LANE_ORDER = ['q', 'a', 'z', 'w', 's', 'x', 'e', 'd', 'c'];
 const KEY_ANGLE = { w: 0, d: 90, s: 180, a: 270, e: 45, c: 135, x: 0, z: 225, q: 315 };
 const KEY_COLOR = { a: '#ff4455', w: '#44dd77', s: '#4499ff', d: '#ffdd33', q: '#cc44ff', e: '#ff8833', z: '#ff44cc', x: '#aaddff', c: '#44ffcc' };
 const KEY_GLOW  = { a: 'rgba(255,68,85,0.9)', w: 'rgba(68,221,119,0.9)', s: 'rgba(68,153,255,0.9)', d: 'rgba(255,221,51,0.9)', q: 'rgba(204,68,255,0.9)', e: 'rgba(255,136,51,0.9)', z: 'rgba(255,68,204,0.9)', x: 'rgba(170,221,255,0.9)', c: 'rgba(68,255,204,0.9)' };
-const ARROW_PATH = 'M 50,5 L 95,50 L 68,50 L 68,95 L 32,95 L 32,50 L 5,50 Z';
+// DDR-style arrow paths
+const ARROW_OUTER = 'M 50,2 L 96,48 L 72,48 L 72,98 L 28,98 L 28,48 L 4,48 Z';
+const ARROW_INNER = 'M 50,14 L 84,48 L 66,48 L 66,88 L 34,88 L 34,48 L 16,48 Z';
+const ARROW_CHEVRON = 'M 50,22 L 72,44 L 62,44 L 50,32 L 38,44 L 28,44 Z';
 
-function createArrowEl(key) {
+function createArrowEl(key, isTarget) {
   const angle = KEY_ANGLE[key] ?? 0;
   const color = KEY_COLOR[key] || '#ffffff';
   const glow  = KEY_GLOW[key]  || 'rgba(255,255,255,0.5)';
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 100 100');
-  svg.style.filter = `drop-shadow(0 0 7px ${glow})`;
-  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-  path.setAttribute('d', ARROW_PATH);
-  path.setAttribute('fill', color);
-  if (angle !== 0) path.setAttribute('transform', `rotate(${angle}, 50, 50)`);
-  svg.appendChild(path);
+
+  if (isTarget) {
+    // Hollow outlined arrow for hit zone targets
+    svg.style.opacity = '0.45';
+    const outline = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    outline.setAttribute('d', ARROW_OUTER);
+    outline.setAttribute('fill', 'none');
+    outline.setAttribute('stroke', color);
+    outline.setAttribute('stroke-width', '3');
+    if (angle !== 0) outline.setAttribute('transform', `rotate(${angle}, 50, 50)`);
+    svg.appendChild(outline);
+    const chevron = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    chevron.setAttribute('d', ARROW_CHEVRON);
+    chevron.setAttribute('fill', 'none');
+    chevron.setAttribute('stroke', color);
+    chevron.setAttribute('stroke-width', '2');
+    if (angle !== 0) chevron.setAttribute('transform', `rotate(${angle}, 50, 50)`);
+    svg.appendChild(chevron);
+  } else {
+    // Filled arrow for scrolling notes
+    svg.style.filter = `drop-shadow(0 0 8px ${glow})`;
+    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    if (angle !== 0) g.setAttribute('transform', `rotate(${angle}, 50, 50)`);
+    // Dark border
+    const border = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    border.setAttribute('d', ARROW_OUTER);
+    border.setAttribute('fill', '#1a1a2e');
+    border.setAttribute('stroke', color);
+    border.setAttribute('stroke-width', '3');
+    g.appendChild(border);
+    // Inner fill
+    const inner = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    inner.setAttribute('d', ARROW_INNER);
+    inner.setAttribute('fill', color);
+    inner.setAttribute('opacity', '0.85');
+    g.appendChild(inner);
+    // Chevron highlight
+    const chevron = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    chevron.setAttribute('d', ARROW_CHEVRON);
+    chevron.setAttribute('fill', 'rgba(255,255,255,0.35)');
+    g.appendChild(chevron);
+    svg.appendChild(g);
+  }
   return svg;
 }
 
@@ -129,7 +169,7 @@ function rebuildLanes() {
     const label = document.createElement('div');
     label.className = `lane-label lane-label-key-${key}`;
     label.dataset.key = key;
-    const labelArrow = createArrowEl(key);
+    const labelArrow = createArrowEl(key, true);
     labelArrow.classList.add('label-arrow');
     label.appendChild(labelArrow);
     laneLabels.appendChild(label);
