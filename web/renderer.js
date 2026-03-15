@@ -423,6 +423,7 @@ function onKeyPress(key) {
   updateCurrency();
   updateCombo();
   updateAccuracy();
+  updateStats();
 }
 
 // --- Stick Figures ---
@@ -486,6 +487,7 @@ function autoDancerHit(note) {
   updateCurrency();
   updateCombo();
   updateAccuracy();
+  updateStats();
 }
 
 function onNoteMiss(note) {
