@@ -137,7 +137,7 @@ async function startCapture() {
   if (isListening) stopListening();
 
   listenBtn.style.display = 'none';
-  beatCounterEl.textContent = 'Share a tab/screen with audio...';
+  beatCounterEl.textContent = 'Pick a tab playing music and check "Share audio"';
 
   try {
     const stream = await navigator.mediaDevices.getDisplayMedia({
@@ -145,12 +145,11 @@ async function startCapture() {
       audio: true,
     });
 
-    // We only need the audio track; drop video to save resources
+    // Drop the video track, we only need audio
     stream.getVideoTracks().forEach((t) => t.stop());
 
     if (stream.getAudioTracks().length === 0) {
-      console.error('No audio track — user may not have checked "Share audio"');
-      beatCounterEl.textContent = 'No audio — click Listen and share with audio';
+      beatCounterEl.textContent = 'No audio — make sure to check "Share audio"';
       listenBtn.style.display = '';
       return;
     }
@@ -167,6 +166,11 @@ async function startCapture() {
     isListening = true;
     energyHistory = [];
     lastOnsetTime = 0;
+
+    // If the shared tab/screen ends, stop gracefully
+    stream.getAudioTracks()[0].addEventListener('ended', () => {
+      stopListening();
+    });
 
     listenBtn.style.display = 'none';
     stopBtn.style.display = '';
