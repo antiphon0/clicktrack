@@ -547,6 +547,8 @@ function updateDancerPanel() {
   dancerFiguresEl.innerHTML = html;
 }
 
+const DANCER_EARN_PENALTY = 0.5; // Dancers earn 50% of what manual hits earn
+
 function autoDancerHit(note) {
   note.hit = true;
   const accuracy = getDancerAccuracy(state.dancers.level);
@@ -556,7 +558,10 @@ function autoDancerHit(note) {
   }, 150);
   comboStreak++;
   const result = processTap(state, note.key, accuracy);
-  showFeedback(accuracy, result.earned);
+  const penalty = result.earned * (1 - DANCER_EARN_PENALTY);
+  state.currency -= penalty;
+  state.totalEarned -= penalty;
+  showFeedback(accuracy, result.earned - penalty);
   accuracyCounts[accuracy]++;
   updateCurrency();
   updateCombo();
