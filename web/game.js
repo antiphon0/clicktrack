@@ -37,7 +37,9 @@ function createDefaultState() {
     tierUnlocked: 1,
     prestige: {
       count: 0,
+      stars: 0,
       multiplier: 1,
+      purchasedUpgrades: [],
     },
     offlineSong: {
       bpm: OFFLINE_SONG_BPM,
@@ -57,6 +59,8 @@ function createDefaultState() {
       count: 0,
       level: 1,
     },
+    achievements: [],
+    lastSaveTime: null,
   };
 }
 
@@ -70,7 +74,7 @@ const KEY_VALUE_BONUS = { q: 3, e: 3, z: 3, x: 3, c: 3 };
 function getKeyValue(state, key) {
   const keyState = state.keys[key];
   if (!keyState || !keyState.unlocked) return 0;
-  return keyState.level * state.prestige.multiplier * (KEY_VALUE_BONUS[key] || 1);
+  return keyState.level * state.prestige.multiplier * getAchievementMultiplier(state) * (KEY_VALUE_BONUS[key] || 1);
 }
 
 function getComboMultiplier(combo) {
@@ -243,6 +247,101 @@ function upgradeDancers(state) {
   return { state, success: true };
 }
 
+// --- Prestige ---
+function getPrestigeGain(totalEarned) {
+  if (totalEarned < 1000) return 0;
+  return Math.floor(Math.sqrt(totalEarned / 1000));
+}
+
+function performPrestige(state) {
+  const gain = getPrestigeGain(state.totalEarned);
+  if (gain <= 0) return { state, success: false };
+
+  state.prestige.count++;
+  state.prestige.stars += gain;
+  state.prestige.multiplier = 1 + state.prestige.stars * 0.1;
+
+  // Reset run-specific progress
+  state.currency = 0;
+  state.totalEarned = 0;
+  state.tierUnlocked = 1;
+  state.keys = createDefaultKeyState();
+  state.dancers = { count: 0, level: 1 };
+  state.stats = { totalTaps: 0, totalMisses: 0, bestCombo: 0, songsPlayed: 0 };
+
+  return { state, success: true };
+}
+
+// --- Achievements ---
+const ACHIEVEMENTS = [
+  // Taps
+  { id: 'first_beat',    name: 'First Beat',       desc: 'Hit your first note',         check: s => s.stats.totalTaps >= 1 },
+  { id: 'hundred_hits',  name: 'Centurion',         desc: 'Hit 100 notes',               check: s => s.stats.totalTaps >= 100 },
+  { id: 'thousand_hits', name: 'Dedicated',         desc: 'Hit 1,000 notes',             check: s => s.stats.totalTaps >= 1000 },
+  { id: 'ten_k_hits',    name: 'Rhythm Machine',    desc: 'Hit 10,000 notes',            check: s => s.stats.totalTaps >= 10000 },
+  // Currency
+  { id: 'earn_1k',       name: 'Getting Started',   desc: 'Earn 1,000 total beats',      check: s => s.totalEarned >= 1000 },
+  { id: 'earn_100k',     name: 'Big Earner',        desc: 'Earn 100K total beats',       check: s => s.totalEarned >= 100000 },
+  { id: 'earn_1m',       name: 'Millionaire',       desc: 'Earn 1M total beats',         check: s => s.totalEarned >= 1000000 },
+  { id: 'earn_1b',       name: 'Billionaire',       desc: 'Earn 1B total beats',         check: s => s.totalEarned >= 1000000000 },
+  // Combo
+  { id: 'combo_10',      name: 'On a Roll',         desc: 'Reach a 10 combo',            check: s => s.stats.bestCombo >= 10 },
+  { id: 'combo_50',      name: 'Streak Master',     desc: 'Reach a 50 combo',            check: s => s.stats.bestCombo >= 50 },
+  { id: 'combo_100',     name: 'Combo King',        desc: 'Reach a 100 combo',           check: s => s.stats.bestCombo >= 100 },
+  { id: 'combo_500',     name: 'Untouchable',       desc: 'Reach a 500 combo',           check: s => s.stats.bestCombo >= 500 },
+  { id: 'combo_1000',    name: 'Legendary',         desc: 'Reach a 1,000 combo',         check: s => s.stats.bestCombo >= 1000 },
+  // Keys / Tiers
+  { id: 'tier_2',        name: 'New Keys',          desc: 'Unlock tier 2',               check: s => s.tierUnlocked >= 2 },
+  { id: 'tier_3',        name: 'Expanding',         desc: 'Unlock tier 3',               check: s => s.tierUnlocked >= 3 },
+  { id: 'tier_5',        name: 'Full Band',         desc: 'Unlock all 5 tiers',          check: s => s.tierUnlocked >= 5 },
+  // Dancers
+  { id: 'dancer_1',      name: 'Backup Dancer',     desc: 'Hire your first dancer',      check: s => (s.dancers?.count ?? 0) >= 1 },
+  { id: 'dancer_5',      name: 'Dance Crew',        desc: 'Hire 5 dancers',              check: s => (s.dancers?.count ?? 0) >= 5 },
+  { id: 'dancer_10',     name: 'Flash Mob',         desc: 'Hire 10 dancers',             check: s => (s.dancers?.count ?? 0) >= 10 },
+  // Prestige
+  { id: 'prestige_1',    name: 'Fresh Start',       desc: 'Prestige for the first time', check: s => s.prestige.count >= 1 },
+  { id: 'prestige_5',    name: 'Star Collector',    desc: 'Prestige 5 times',            check: s => s.prestige.count >= 5 },
+  { id: 'prestige_10',   name: 'Veteran',           desc: 'Prestige 10 times',           check: s => s.prestige.count >= 10 },
+  { id: 'stars_10',      name: 'Starry Night',      desc: 'Accumulate 10 stars',         check: s => (s.prestige.stars ?? 0) >= 10 },
+  { id: 'stars_50',      name: 'Constellation',     desc: 'Accumulate 50 stars',         check: s => (s.prestige.stars ?? 0) >= 50 },
+];
+
+function checkAchievements(state) {
+  if (!state.achievements) state.achievements = [];
+  const newlyUnlocked = [];
+  for (const ach of ACHIEVEMENTS) {
+    if (state.achievements.includes(ach.id)) continue;
+    if (ach.check(state)) {
+      state.achievements.push(ach.id);
+      newlyUnlocked.push(ach);
+    }
+  }
+  return newlyUnlocked;
+}
+
+function getAchievementMultiplier(state) {
+  const count = state.achievements ? state.achievements.length : 0;
+  return 1 + count * 0.01; // +1% per achievement
+}
+
+// --- Offline Progress ---
+function calculateOfflineEarnings(state, elapsedMs) {
+  if (!state.dancers || state.dancers.count <= 0) return 0;
+  const dancerCount = state.dancers.count;
+  const accuracy = getDancerAccuracy(state.dancers.level);
+  const accMult = ACCURACY_MULTIPLIERS[accuracy] || 0.5;
+  // Average key value across unlocked keys
+  const unlockedKeys = Object.entries(state.keys).filter(([, v]) => v.unlocked);
+  if (unlockedKeys.length === 0) return 0;
+  const avgKeyValue = unlockedKeys.reduce((sum, [k]) => sum + getKeyValue(state, k), 0) / unlockedKeys.length;
+  // Dancers hit roughly every 0.4s (400ms cooldown) while online
+  const hitsPerSecond = dancerCount / 0.4;
+  const earningsPerSecond = hitsPerSecond * avgKeyValue * accMult;
+  const offlineEfficiency = 0.25; // 25% of online rate
+  const elapsedSeconds = elapsedMs / 1000;
+  return Math.floor(earningsPerSecond * elapsedSeconds * offlineEfficiency);
+}
+
 // Calculate beat interval in ms from BPM
 function beatIntervalMs(bpm) {
   return 60000 / bpm;
@@ -278,6 +377,12 @@ if (typeof module !== 'undefined') {
     getDancerAccuracy,
     hireDancer,
     upgradeDancers,
+    getPrestigeGain,
+    performPrestige,
+    ACHIEVEMENTS,
+    checkAchievements,
+    getAchievementMultiplier,
+    calculateOfflineEarnings,
     KEY_TIERS,
     ALL_KEYS,
     COMBO_THRESHOLDS,
@@ -304,6 +409,12 @@ if (typeof module !== 'undefined') {
     getDancerAccuracy,
     hireDancer,
     upgradeDancers,
+    getPrestigeGain,
+    performPrestige,
+    ACHIEVEMENTS,
+    checkAchievements,
+    getAchievementMultiplier,
+    calculateOfflineEarnings,
     KEY_TIERS,
     ALL_KEYS,
     COMBO_THRESHOLDS,

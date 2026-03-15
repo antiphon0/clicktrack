@@ -58,34 +58,61 @@
       </div>
     </div>
 
-    <!-- Right column: panels -->
+    <!-- Right column: tabbed panels -->
     <div id="side-column">
-      <!-- Upgrades -->
-      <div id="upgrades" class="panel">
-        <h2>Upgrades</h2>
-        <div id="key-upgrades"></div>
-        <div id="tier-unlock">
-          <button id="unlock-tier-btn" class="btn">
-            Unlock next tier &mdash; <span id="tier-cost"></span> beats
+      <div id="side-tabs">
+        <button class="side-tab active" data-tab="upgrades">Upgrades</button>
+        <button class="side-tab" data-tab="dancers">Dancers</button>
+        <button class="side-tab" data-tab="prestige">&#11088; Prestige</button>
+        <button class="side-tab" data-tab="achievements">&#127942; Achieve</button>
+        <button class="side-tab" data-tab="stats">Stats</button>
+      </div>
+
+      <div id="tab-content">
+        <!-- Upgrades -->
+        <div id="upgrades" class="tab-pane active" data-tab="upgrades">
+          <div id="key-upgrades"></div>
+          <div id="tier-unlock">
+            <button id="unlock-tier-btn" class="btn">
+              Unlock next tier &mdash; <span id="tier-cost"></span> beats
+            </button>
+          </div>
+        </div>
+
+        <!-- Dancers -->
+        <div id="dancers" class="tab-pane" data-tab="dancers">
+          <div id="dancer-accuracy-label"></div>
+          <div id="dancer-figures"></div>
+          <div id="dancer-controls">
+            <button id="hire-dancer-btn" class="btn btn-small">Hire dancer &mdash; <span id="dancer-hire-cost">50</span> beats</button>
+            <button id="upgrade-dancer-btn" class="btn btn-small">Upgrade accuracy &mdash; <span id="dancer-upgrade-cost"></span> beats</button>
+          </div>
+        </div>
+
+        <!-- Prestige -->
+        <div id="prestige" class="tab-pane prestige-pane" data-tab="prestige">
+          <div id="prestige-info">
+            <div class="stat-row"><span class="stat-label">Stars</span><span class="stat-value" id="prestige-stars">0</span></div>
+            <div class="stat-row"><span class="stat-label">Multiplier</span><span class="stat-value" id="prestige-multiplier">1.0x</span></div>
+            <div class="stat-row"><span class="stat-label">Prestiges</span><span class="stat-value" id="prestige-count">0</span></div>
+            <div class="stat-row"><span class="stat-label">Pending stars</span><span class="stat-value" id="prestige-pending">0</span></div>
+          </div>
+          <button id="prestige-btn" class="btn prestige-btn" disabled>
+            Prestige for <span id="prestige-gain">0</span> &#11088;
           </button>
+          <p class="hint" id="prestige-hint">Earn 1,000 total beats to unlock prestige</p>
         </div>
-      </div>
 
-      <!-- Dancers -->
-      <div id="dancers" class="panel">
-        <h2>Dancers</h2>
-        <div id="dancer-accuracy-label"></div>
-        <div id="dancer-figures"></div>
-        <div id="dancer-controls">
-          <button id="hire-dancer-btn" class="btn btn-small">Hire dancer &mdash; <span id="dancer-hire-cost">50</span> beats</button>
-          <button id="upgrade-dancer-btn" class="btn btn-small">Upgrade accuracy &mdash; <span id="dancer-upgrade-cost"></span> beats</button>
+        <!-- Achievements -->
+        <div id="achievements" class="tab-pane" data-tab="achievements">
+          <div id="achievement-header"><span id="achievement-counter" class="hint"></span></div>
+          <div id="achievement-list"></div>
         </div>
-      </div>
 
-      <!-- Stats -->
-      <div id="stats" class="panel">
-        <h2>Stats</h2>
-        <div id="stats-content"></div>
+        <!-- Stats -->
+        <div id="stats" class="tab-pane" data-tab="stats">
+          <div id="stats-content"></div>
+        </div>
       </div>
     </div>
   </div>

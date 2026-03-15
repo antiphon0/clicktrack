@@ -54,17 +54,71 @@ body {
 #side-column {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  overflow-y: auto;
   min-height: 0;
-  padding-right: 4px;
+  overflow: hidden;
 }
 
-/* Scrollbar for side column */
-#side-column::-webkit-scrollbar { width: 6px; }
-#side-column::-webkit-scrollbar-track { background: transparent; }
-#side-column::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
-#side-column::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+/* Tab bar */
+#side-tabs {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0;
+}
+
+.side-tab {
+  flex: 1;
+  padding: 8px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  background: transparent;
+  color: var(--text-dim);
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.side-tab:hover {
+  color: var(--text);
+  background: rgba(255,255,255,0.04);
+}
+
+.side-tab.active {
+  color: var(--accent);
+  background: var(--panel);
+  border-color: var(--border);
+}
+
+/* Tab content area */
+#tab-content {
+  flex: 1;
+  overflow-y: auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+  padding: 16px;
+}
+
+#tab-content::-webkit-scrollbar { width: 6px; }
+#tab-content::-webkit-scrollbar-track { background: transparent; }
+#tab-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+#tab-content::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
+
+/* Tab panes */
+.tab-pane {
+  display: none;
+}
+
+.tab-pane.active {
+  display: block;
+}
 
 /* Header */
 #header {
@@ -92,7 +146,7 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* Panels */
+/* Panels (used for audio-status and any standalone panels) */
 .panel {
   background: var(--panel);
   border: 1px solid var(--border);
@@ -566,6 +620,121 @@ body {
 @keyframes dance {
   0%   { transform: rotate(-14deg) translateY(0); }
   100% { transform: rotate(14deg) translateY(-4px); }
+}
+
+/* --- Prestige Pane --- */
+.prestige-pane {
+  border-radius: 4px;
+  padding: 4px;
+  background: linear-gradient(135deg, rgba(212,160,23,0.05) 0%, transparent 100%);
+}
+
+.prestige-btn {
+  width: 100%;
+  margin-top: 10px;
+  padding: 10px 16px;
+  background: linear-gradient(135deg, #d4a017, #b8860b);
+  color: #fff;
+  font-weight: 700;
+  font-size: 0.95rem;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: filter 0.15s, box-shadow 0.15s;
+}
+
+.prestige-btn:hover:not(:disabled) {
+  filter: brightness(1.2);
+  box-shadow: 0 0 12px rgba(212,160,23,0.5);
+}
+
+.prestige-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  background: #555;
+}
+
+/* --- Achievements Pane --- */
+#achievement-header .hint {
+  font-size: 0.75rem;
+  font-weight: 400;
+}
+
+#achievement-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.achievement-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  font-size: 0.82rem;
+  transition: background 0.2s;
+}
+
+.achievement-item.unlocked {
+  background: rgba(68,221,119,0.08);
+  border-color: rgba(68,221,119,0.2);
+}
+
+.achievement-item.locked {
+  opacity: 0.45;
+}
+
+.achievement-icon {
+  font-size: 1.1rem;
+  flex-shrink: 0;
+}
+
+.achievement-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.achievement-name {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.achievement-desc {
+  color: var(--text-dim);
+  font-size: 0.75rem;
+}
+
+/* Achievement toast */
+.achievement-toast {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: linear-gradient(135deg, rgba(68,221,119,0.95), rgba(40,160,80,0.95));
+  color: #fff;
+  padding: 10px 20px;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  z-index: 1000;
+  pointer-events: none;
+  animation: toast-in 0.3s ease-out, toast-out 0.4s ease-in 2.2s forwards;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-20px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+@keyframes toast-out {
+  from { opacity: 1; }
+  to { opacity: 0; transform: translateX(-50%) translateY(-20px); }
 }
 
 

@@ -81,6 +81,30 @@ const upgradeDancerBtn = $('#upgrade-dancer-btn');
 const upgradeDancerCostEl = $('#dancer-upgrade-cost');
 const dancerAccuracyLabelEl = $('#dancer-accuracy-label');
 
+// Prestige DOM refs
+const prestigeStarsEl = $('#prestige-stars');
+const prestigeMultiplierEl = $('#prestige-multiplier');
+const prestigeCountEl = $('#prestige-count');
+const prestigePendingEl = $('#prestige-pending');
+const prestigeGainEl = $('#prestige-gain');
+const prestigeBtn = $('#prestige-btn');
+const prestigeHintEl = $('#prestige-hint');
+
+// Achievement DOM refs
+const achievementListEl = $('#achievement-list');
+const achievementCounterEl = $('#achievement-counter');
+
+// --- Tab switching ---
+document.querySelectorAll('.side-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.side-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+    tab.classList.add('active');
+    const pane = document.querySelector(`.tab-pane[data-tab="${tab.dataset.tab}"]`);
+    if (pane) pane.classList.add('active');
+  });
+});
+
 // --- Helpers ---
 function formatNumber(n) {
   if (n < 1000) return Math.floor(n).toString();
@@ -473,6 +497,7 @@ function onKeyPress(key) {
   updateCombo();
   updateAccuracy();
   updateStats();
+  runAchievementCheck();
 }
 
 // --- Stick Figures ---
@@ -537,6 +562,7 @@ function autoDancerHit(note) {
   updateCombo();
   updateAccuracy();
   updateStats();
+  runAchievementCheck();
 }
 
 function onNoteMiss(note) {
@@ -570,6 +596,7 @@ function updateCurrency() {
       upgradeDancerBtn.disabled = state.currency < getDancerUpgradeCost(state.dancers.level);
     }
   }
+  updatePrestigePanel();
 }
 
 function updateCombo() {
@@ -656,6 +683,57 @@ function updateStats() {
   `;
 }
 
+function updatePrestigePanel() {
+  const stars = state.prestige.stars || 0;
+  const mult = state.prestige.multiplier || 1;
+  const count = state.prestige.count || 0;
+  const pending = getPrestigeGain(state.totalEarned);
+
+  prestigeStarsEl.textContent = formatNumber(stars);
+  prestigeMultiplierEl.textContent = mult.toFixed(1) + 'x';
+  prestigeCountEl.textContent = count;
+  prestigePendingEl.textContent = pending;
+  prestigeGainEl.textContent = pending;
+
+  prestigeBtn.disabled = pending <= 0;
+  prestigeHintEl.style.display = pending > 0 ? 'none' : '';
+}
+
+function updateAchievementsPanel() {
+  if (!state.achievements) state.achievements = [];
+  const unlocked = state.achievements;
+  achievementCounterEl.textContent = `(${unlocked.length}/${ACHIEVEMENTS.length})`;
+
+  let html = '';
+  for (const ach of ACHIEVEMENTS) {
+    const done = unlocked.includes(ach.id);
+    html += `<div class="achievement-item ${done ? 'unlocked' : 'locked'}">
+      <span class="achievement-icon">${done ? '\u2705' : '\u{1F512}'}</span>
+      <div class="achievement-info">
+        <div class="achievement-name">${ach.name}</div>
+        <div class="achievement-desc">${ach.desc}</div>
+      </div>
+    </div>`;
+  }
+  achievementListEl.innerHTML = html;
+}
+
+function showAchievementToast(ach) {
+  const toast = document.createElement('div');
+  toast.className = 'achievement-toast';
+  toast.textContent = '\u{1F3C6} ' + ach.name + ' unlocked!';
+  document.body.appendChild(toast);
+  setTimeout(() => { if (toast.parentNode) toast.remove(); }, 2800);
+}
+
+function runAchievementCheck() {
+  const newlyUnlocked = checkAchievements(state);
+  if (newlyUnlocked.length > 0) {
+    for (const ach of newlyUnlocked) showAchievementToast(ach);
+    updateAchievementsPanel();
+  }
+}
+
 function updateAccuracy() {
   perfectCountEl.textContent = accuracyCounts.perfect;
   goodCountEl.textContent = accuracyCounts.good;
@@ -714,6 +792,7 @@ unlockTierBtn.addEventListener('click', () => {
     rebuildLanes();
     updateCurrency();
     updateUpgrades();
+    runAchievementCheck();
   }
 });
 
@@ -725,6 +804,7 @@ hireDancerBtn.addEventListener('click', () => {
     updateCurrency();
     updateDancerPanel();
     updateUpgrades();
+    runAchievementCheck();
   }
 });
 
@@ -738,11 +818,35 @@ upgradeDancerBtn.addEventListener('click', () => {
   }
 });
 
+prestigeBtn.addEventListener('click', () => {
+  const gain = getPrestigeGain(state.totalEarned);
+  if (gain <= 0) return;
+  if (!confirm(`Prestige for ${gain} star${gain !== 1 ? 's' : ''}? This resets your keys, currency, dancers, and tiers.`)) return;
+  const result = performPrestige(state);
+  if (result.success) {
+    state = result.state;
+    comboStreak = 0;
+    accuracyCounts = { perfect: 0, good: 0, ok: 0, miss: 0 };
+    syncDancerCooldowns();
+    rebuildLanes();
+    updateCurrency();
+    updateUpgrades();
+    updateDancerPanel();
+    updatePrestigePanel();
+    updateStats();
+    updateCombo();
+    updateAccuracy();
+    runAchievementCheck();
+    saveGame();
+  }
+});
+
 // --- Save/Load (localStorage) ---
 const SAVE_KEY = 'clicktrack-save';
 
 function saveGame() {
   try {
+    state.lastSaveTime = Date.now();
     localStorage.setItem(SAVE_KEY, JSON.stringify(state));
   } catch (e) {
     console.warn('Save failed:', e);
@@ -758,17 +862,58 @@ function loadGame() {
   }
 }
 
+// --- Welcome Back Modal ---
+function showWelcomeBack(elapsedMs, earnings) {
+  const minutes = Math.floor(elapsedMs / 60000);
+  const hours = Math.floor(minutes / 60);
+  const timeStr = hours > 0 ? `${hours}h ${minutes % 60}m` : `${minutes}m`;
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:2000;';
+
+  const modal = document.createElement('div');
+  modal.style.cssText = 'background:#1a1a2e;border:1px solid #333;border-radius:12px;padding:28px 36px;text-align:center;max-width:340px;color:#eee;';
+  modal.innerHTML = `
+    <h2 style="margin:0 0 12px;color:#f0c040;">Welcome back!</h2>
+    <p style="margin:0 0 8px;color:#aaa;">You were away for <strong style="color:#eee;">${timeStr}</strong></p>
+    <p style="margin:0 0 18px;font-size:1.2rem;">Your dancers earned <strong style="color:#44dd77;">${formatNumber(earnings)}</strong> beats</p>
+    <button style="padding:8px 24px;background:#44dd77;color:#111;border:none;border-radius:6px;font-weight:700;cursor:pointer;font-size:0.95rem;">Collect</button>
+  `;
+  modal.querySelector('button').addEventListener('click', () => overlay.remove());
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+}
+
 // --- Init ---
 function init() {
   loadGame();
   if (!state.dancers) state.dancers = { count: 0, level: 1 };
   if (!state.stats) state.stats = { totalTaps: 0, totalMisses: 0, bestCombo: 0 };
-  if (!state.prestige) state.prestige = { count: 0, multiplier: 1 };
+  if (!state.prestige) state.prestige = { count: 0, stars: 0, multiplier: 1, purchasedUpgrades: [] };
+  if (state.prestige.stars === undefined) state.prestige.stars = 0;
+  if (!state.prestige.purchasedUpgrades) state.prestige.purchasedUpgrades = [];
+  if (!state.achievements) state.achievements = [];
   syncDancerCooldowns();
+
+  // Offline progress
+  if (state.lastSaveTime) {
+    const elapsed = Date.now() - state.lastSaveTime;
+    if (elapsed > 60000) { // at least 1 minute away
+      const earnings = calculateOfflineEarnings(state, elapsed);
+      if (earnings > 0) {
+        state.currency += earnings;
+        state.totalEarned += earnings;
+        showWelcomeBack(elapsed, earnings);
+      }
+    }
+  }
+
   rebuildLanes();
   updateCurrency();
   updateUpgrades();
   updateDancerPanel();
+  updatePrestigePanel();
+  updateAchievementsPanel();
   updateStats();
   updateAccuracy();
   updateCombo();
