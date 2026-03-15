@@ -96,10 +96,8 @@ const LANE_ORDER = ['q', 'a', 'z', 'w', 's', 'x', 'e', 'd', 'c'];
 const KEY_ANGLE = { w: 0, d: 90, s: 180, a: 270, e: 45, c: 135, x: 0, z: 225, q: 315 };
 const KEY_COLOR = { a: '#ff4455', w: '#44dd77', s: '#4499ff', d: '#ffdd33', q: '#cc44ff', e: '#ff8833', z: '#ff44cc', x: '#aaddff', c: '#44ffcc' };
 const KEY_GLOW  = { a: 'rgba(255,68,85,0.9)', w: 'rgba(68,221,119,0.9)', s: 'rgba(68,153,255,0.9)', d: 'rgba(255,221,51,0.9)', q: 'rgba(204,68,255,0.9)', e: 'rgba(255,136,51,0.9)', z: 'rgba(255,68,204,0.9)', x: 'rgba(170,221,255,0.9)', c: 'rgba(68,255,204,0.9)' };
-// DDR-style arrow paths
-const ARROW_OUTER = 'M 50,2 L 96,48 L 72,48 L 72,98 L 28,98 L 28,48 L 4,48 Z';
-const ARROW_INNER = 'M 50,14 L 84,48 L 66,48 L 66,88 L 34,88 L 34,48 L 16,48 Z';
-const ARROW_CHEVRON = 'M 50,22 L 72,44 L 62,44 L 50,32 L 38,44 L 28,44 Z';
+// DDR-style arrow: wide head, narrow stem, clean proportions
+const ARROW_SHAPE = 'M 50,4 L 92,46 L 66,46 L 66,96 L 34,96 L 34,46 L 8,46 Z';
 
 function createArrowEl(key, isTarget) {
   const angle = KEY_ANGLE[key] ?? 0;
@@ -108,48 +106,32 @@ function createArrowEl(key, isTarget) {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 100 100');
 
+  const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+  if (angle !== 0) g.setAttribute('transform', `rotate(${angle}, 50, 50)`);
+
   if (isTarget) {
-    // Hollow outlined arrow for hit zone targets
-    svg.style.opacity = '0.45';
+    // Hollow ghost arrow at the hit zone
+    svg.style.opacity = '0.35';
     const outline = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    outline.setAttribute('d', ARROW_OUTER);
+    outline.setAttribute('d', ARROW_SHAPE);
     outline.setAttribute('fill', 'none');
     outline.setAttribute('stroke', color);
-    outline.setAttribute('stroke-width', '3');
-    if (angle !== 0) outline.setAttribute('transform', `rotate(${angle}, 50, 50)`);
-    svg.appendChild(outline);
-    const chevron = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    chevron.setAttribute('d', ARROW_CHEVRON);
-    chevron.setAttribute('fill', 'none');
-    chevron.setAttribute('stroke', color);
-    chevron.setAttribute('stroke-width', '2');
-    if (angle !== 0) chevron.setAttribute('transform', `rotate(${angle}, 50, 50)`);
-    svg.appendChild(chevron);
+    outline.setAttribute('stroke-width', '2.5');
+    outline.setAttribute('stroke-linejoin', 'round');
+    g.appendChild(outline);
   } else {
-    // Filled arrow for scrolling notes
-    svg.style.filter = `drop-shadow(0 0 8px ${glow})`;
-    const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    if (angle !== 0) g.setAttribute('transform', `rotate(${angle}, 50, 50)`);
-    // Dark border
-    const border = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    border.setAttribute('d', ARROW_OUTER);
-    border.setAttribute('fill', '#1a1a2e');
-    border.setAttribute('stroke', color);
-    border.setAttribute('stroke-width', '3');
-    g.appendChild(border);
-    // Inner fill
-    const inner = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    inner.setAttribute('d', ARROW_INNER);
-    inner.setAttribute('fill', color);
-    inner.setAttribute('opacity', '0.85');
-    g.appendChild(inner);
-    // Chevron highlight
-    const chevron = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    chevron.setAttribute('d', ARROW_CHEVRON);
-    chevron.setAttribute('fill', 'rgba(255,255,255,0.35)');
-    g.appendChild(chevron);
-    svg.appendChild(g);
+    // Solid filled arrow for scrolling notes
+    svg.style.filter = `drop-shadow(0 0 6px ${glow})`;
+    const fill = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    fill.setAttribute('d', ARROW_SHAPE);
+    fill.setAttribute('fill', color);
+    fill.setAttribute('stroke', '#111122');
+    fill.setAttribute('stroke-width', '3');
+    fill.setAttribute('stroke-linejoin', 'round');
+    g.appendChild(fill);
   }
+
+  svg.appendChild(g);
   return svg;
 }
 

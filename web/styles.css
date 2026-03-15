@@ -181,8 +181,20 @@ body {
 }
 
 .lane-flash {
-  background: rgba(124, 92, 252, 0.2) !important;
-  transition: background 0s;
+  background: none !important;
+}
+
+.lane-flash::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 64px;
+  background: rgba(124, 92, 252, 0.25);
+  pointer-events: none;
+  transition: none;
 }
 
 .lane:not(.lane-flash) {
