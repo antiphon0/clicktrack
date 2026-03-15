@@ -627,6 +627,9 @@ document.addEventListener('keydown', (e) => {
     'Numpad7': 'q', 'Numpad8': 'w', 'Numpad9': 'e',
     'Numpad4': 'a', 'Numpad5': 's', 'Numpad6': 'd',
     'Numpad1': 'z', 'Numpad2': 'x', 'Numpad3': 'c',
+    '7': 'q', '8': 'w', '9': 'e',
+    '4': 'a', '5': 's', '6': 'd',
+    '1': 'z', '2': 'x', '3': 'c',
   };
 
   const key = KEY_MAP[e.code] || KEY_MAP[e.key] || e.key.toLowerCase();
@@ -704,6 +707,8 @@ function loadGame() {
 function init() {
   loadGame();
   if (!state.dancers) state.dancers = { count: 0, level: 1 };
+  if (!state.stats) state.stats = { totalTaps: 0, totalMisses: 0, bestCombo: 0 };
+  if (!state.prestige) state.prestige = { count: 0, multiplier: 1 };
   syncDancerCooldowns();
   rebuildLanes();
   updateCurrency();

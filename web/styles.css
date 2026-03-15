@@ -41,7 +41,7 @@ body {
 }
 
 #app.pulse {
-  background: rgba(124, 92, 252, 0.04);
+  background: none;
 }
 
 /* Header */
