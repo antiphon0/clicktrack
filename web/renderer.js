@@ -23,6 +23,10 @@ let totalBeatsDetected = 0;
 const DEFAULT_BPM = 90;
 let lastDefaultBeatTime = 0;
 
+// Grace period — notes spawned in the first few seconds don't penalize
+const GRACE_PERIOD_MS = 3000;
+let gameStartTime = 0;
+
 // Note track
 const SCROLL_TIME_MS = 1500;   // notes take 1.5s to scroll top → hit zone
 const HIT_PERFECT_MS = 80;     // ±80ms = perfect
@@ -327,9 +331,20 @@ function gameLoop() {
     }
 
     if (pastHitMs > MISS_THRESHOLD_MS) {
-      onNoteMiss(note);
+      // During grace period, silently remove instead of penalizing
+      if (now - gameStartTime < GRACE_PERIOD_MS) {
+        if (note.element.parentNode) note.element.parentNode.removeChild(note.element);
+      } else {
+        onNoteMiss(note);
+      }
       activeNotes.splice(i, 1);
     }
+  }
+
+  // Hide onboarding hint after first successful hit
+  if (accuracyCounts.perfect + accuracyCounts.good + accuracyCounts.ok > 0) {
+    const hint = document.getElementById('onboarding-hint');
+    if (hint) hint.remove();
   }
 
   animFrameId = requestAnimationFrame(gameLoop);
@@ -337,6 +352,7 @@ function gameLoop() {
 
 function startDefaultLoop() {
   if (animFrameId) return;
+  gameStartTime = performance.now();
   lastDefaultBeatTime = performance.now();
   gameLoop();
 }
@@ -541,7 +557,7 @@ function updateUpgrades() {
 
 function updateStats() {
   statsContentEl.innerHTML = `
-    <div class="stat-row"><span class="stat-label">Total taps</span><span class="stat-value">${formatNumber(state.stats.totalTaps)}</span></div>
+    <div class="stat-row"><span class="stat-label">Hits</span><span class="stat-value">${formatNumber(state.stats.totalTaps)}</span></div>
     <div class="stat-row"><span class="stat-label">Total earned</span><span class="stat-value">${formatNumber(state.totalEarned)}</span></div>
     <div class="stat-row"><span class="stat-label">Best combo</span><span class="stat-value">${state.stats.bestCombo}</span></div>
     <div class="stat-row"><span class="stat-label">Keys unlocked</span><span class="stat-value">${getUnlockedKeys().length} / ${ALL_KEYS.length}</span></div>
@@ -565,7 +581,7 @@ function showFeedback(type, earned) {
     miss: 'feedback-miss',
   };
 
-  tapFeedbackEl.textContent = labels[type] + (earned > 0 ? ' +' + formatNumber(earned) : '');
+  tapFeedbackEl.textContent = labels[type] + (earned > 0 ? ' +' + (earned < 1 ? earned.toFixed(1) : formatNumber(earned)) : '');
   tapFeedbackEl.className = classes[type];
 
   clearTimeout(tapFeedbackEl._timer);
@@ -673,6 +689,19 @@ function init() {
   updateAccuracy();
   updateCombo();
   listenBtn.style.display = '';
+
+  // Onboarding hint
+  const noteTrack = document.getElementById('note-track');
+  if (noteTrack && !document.getElementById('onboarding-hint')) {
+    const hint = document.createElement('div');
+    hint.id = 'onboarding-hint';
+    hint.textContent = 'Press W when notes reach the line';
+    hint.style.cssText = 'position:absolute;top:40%;left:50%;transform:translate(-50%,-50%);color:rgba(255,255,255,0.6);font-size:1.1rem;letter-spacing:0.05em;pointer-events:none;z-index:10;text-align:center;';
+    noteTrack.style.position = 'relative';
+    noteTrack.appendChild(hint);
+    // Auto-remove after 8 seconds even if no hit
+    setTimeout(() => { if (hint.parentNode) hint.remove(); }, 8000);
+  }
 
   startDefaultLoop();
 

@@ -1,37 +1,11 @@
 {
   "name": "clicktrack",
   "version": "0.1.0",
-  "description": "A rhythm-based incremental game synced to your Spotify playback",
-  "main": "main.js",
+  "description": "A rhythm-based incremental game synced to your music",
   "scripts": {
-    "start": "electron .",
-    "dev": "electron . --dev",
-    "dist": "electron-builder --win",
-    "dist:dir": "electron-builder --win --dir"
+    "start": "python -m http.server 8080 -d web",
+    "dev": "python -m http.server 8080 -d web"
   },
   "author": "",
-  "license": "MIT",
-  "build": {
-    "appId": "com.antiphon.clicktrack",
-    "productName": "Clicktrack",
-    "directories": {
-      "output": "dist"
-    },
-    "files": [
-      "main.js",
-      "preload.js",
-      "src/**/*",
-      "node_modules/**/*"
-    ],
-    "win": {
-      "target": "portable"
-    }
-  },
-  "devDependencies": {
-    "electron": "^33.0.0",
-    "electron-builder": "^25.1.8"
-  },
-  "dependencies": {
-    "sql.js": "^1.14.1"
-  }
+  "license": "MIT"
 }
