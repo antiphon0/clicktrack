@@ -120,7 +120,7 @@ function getUnlockedKeys() {
 
 // Lane order matches physical keyboard position left-to-right (QWERTY x-offsets)
 const LANE_ORDER = ['q', 'a', 'z', 'w', 's', 'x', 'e', 'd', 'c'];
-const KEY_ANGLE = { w: 0, d: 90, s: 180, a: 270, e: 45, c: 135, x: 0, z: 225, q: 315 };
+const KEY_ANGLE = { w: 0, d: 90, s: 180, a: 270, e: 45, c: 135, x: 180, z: 225, q: 315 };
 const KEY_COLOR = { a: '#ff4455', w: '#44dd77', s: '#4499ff', d: '#ffdd33', q: '#cc44ff', e: '#ff8833', z: '#ff44cc', x: '#aaddff', c: '#44ffcc' };
 const KEY_GLOW  = { a: 'rgba(255,68,85,0.9)', w: 'rgba(68,221,119,0.9)', s: 'rgba(68,153,255,0.9)', d: 'rgba(255,221,51,0.9)', q: 'rgba(204,68,255,0.9)', e: 'rgba(255,136,51,0.9)', z: 'rgba(255,68,204,0.9)', x: 'rgba(170,221,255,0.9)', c: 'rgba(68,255,204,0.9)' };
 // DDR-style arrow: wide head, narrow stem, clean proportions
