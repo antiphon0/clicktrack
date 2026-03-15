@@ -28,7 +28,7 @@ const GRACE_PERIOD_MS = 3000;
 let gameStartTime = 0;
 
 // Note track
-const SCROLL_TIME_MS = 1500;   // notes take 1.5s to scroll top → hit zone
+const SCROLL_TIME_MS = 2500;   // notes take 2.5s to scroll top → hit zone
 const HIT_PERFECT_MS = 80;     // ±80ms = perfect
 const HIT_GOOD_MS = 160;       // ±160ms = good
 const HIT_OK_MS = 280;         // ±280ms = ok
