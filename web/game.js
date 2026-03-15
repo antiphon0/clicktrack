@@ -148,6 +148,49 @@ function upgradeKey(state, key) {
   return { state, success: true };
 }
 
+// Calculate total cost to upgrade a key N times from its current level
+function getBulkUpgradeCost(level, count) {
+  let total = 0;
+  for (let i = 0; i < count; i++) {
+    total += getKeyUpgradeCost(level + i);
+  }
+  return total;
+}
+
+// How many times can we afford to upgrade a key from its current level?
+function getMaxAffordableUpgrades(state, key) {
+  const keyState = state.keys[key];
+  if (!keyState || !keyState.unlocked) return 0;
+  let budget = state.currency;
+  let lvl = keyState.level;
+  let count = 0;
+  while (true) {
+    const cost = getKeyUpgradeCost(lvl);
+    if (budget < cost) break;
+    budget -= cost;
+    lvl++;
+    count++;
+  }
+  return count;
+}
+
+// Upgrade a key multiple times (for 10x/100x/Max)
+function upgradeKeyBulk(state, key, count) {
+  const keyState = state.keys[key];
+  if (!keyState || !keyState.unlocked) return { state, success: false, bought: 0 };
+
+  let bought = 0;
+  for (let i = 0; i < count; i++) {
+    const cost = getKeyUpgradeCost(keyState.level);
+    if (state.currency < cost) break;
+    state.currency -= cost;
+    keyState.level++;
+    bought++;
+  }
+
+  return { state, success: bought > 0, bought };
+}
+
 // Unlock the next tier of keys
 function unlockTier(state) {
   const nextTier = state.tierUnlocked + 1;
@@ -220,6 +263,9 @@ if (typeof module !== 'undefined') {
     processTap,
     processMiss,
     upgradeKey,
+    upgradeKeyBulk,
+    getBulkUpgradeCost,
+    getMaxAffordableUpgrades,
     unlockTier,
     getKeyUpgradeCost,
     getKeyValue,
@@ -243,6 +289,9 @@ if (typeof module !== 'undefined') {
     processTap,
     processMiss,
     upgradeKey,
+    upgradeKeyBulk,
+    getBulkUpgradeCost,
+    getMaxAffordableUpgrades,
     unlockTier,
     getKeyUpgradeCost,
     getKeyValue,

@@ -10,6 +10,9 @@ let mediaStream = null;
 let saveInterval = null;
 let animFrameId = null;
 
+// Buy mode for bulk upgrades: '1x', '10x', '100x', 'max'
+let buyMode = '1x';
+
 // Onset detection
 const ENERGY_HISTORY_SIZE = 43;
 const ONSET_THRESHOLD = 1.5;
@@ -576,10 +579,36 @@ function updateCombo() {
 
 function updateUpgrades() {
   keyUpgradesEl.innerHTML = '';
+
+  // Buy-mode toggle bar
+  const modeBar = document.createElement('div');
+  modeBar.className = 'buy-mode-bar';
+  for (const mode of ['1x', '10x', '100x', 'Max']) {
+    const btn = document.createElement('button');
+    btn.className = 'buy-mode-btn' + (buyMode === mode ? ' active' : '');
+    btn.textContent = mode;
+    btn.addEventListener('click', () => {
+      buyMode = mode;
+      updateUpgrades();
+    });
+    modeBar.appendChild(btn);
+  }
+  keyUpgradesEl.appendChild(modeBar);
+
   for (const key of getUnlockedKeys()) {
     const ks = state.keys[key];
-    const cost = getKeyUpgradeCost(ks.level);
-    const canAfford = state.currency >= cost;
+    let count, cost, label;
+    if (buyMode === 'Max') {
+      count = getMaxAffordableUpgrades(state, key);
+      cost = count > 0 ? getBulkUpgradeCost(ks.level, count) : getKeyUpgradeCost(ks.level);
+      label = count > 0 ? `MAX (${count})` : '\u{1F512}';
+    } else {
+      count = parseInt(buyMode);
+      cost = getBulkUpgradeCost(ks.level, count);
+      label = state.currency >= cost ? `UPGRADE ${buyMode}` : '\u{1F512}';
+    }
+    const canAfford = buyMode === 'Max' ? count > 0 : state.currency >= cost;
+
     const div = document.createElement('div');
     div.className = 'key-upgrade' + (canAfford ? ' affordable' : '');
     div.dataset.key = key;
@@ -589,11 +618,13 @@ function updateUpgrades() {
         <span class="key-upgrade-level">Level ${ks.level}</span>
         <span class="key-upgrade-cost">${formatNumber(cost)} beats</span>
       </span>
-      <span class="key-upgrade-action">${canAfford ? 'UPGRADE' : '\u{1F512}'}</span>
+      <span class="key-upgrade-action">${label}</span>
     `;
     if (canAfford) {
       div.addEventListener('click', () => {
-        const result = upgradeKey(state, key);
+        const result = buyMode === '1x'
+          ? upgradeKey(state, key)
+          : upgradeKeyBulk(state, key, buyMode === 'Max' ? getMaxAffordableUpgrades(state, key) : parseInt(buyMode));
         if (result.success) {
           state = result.state;
           updateCurrency();
