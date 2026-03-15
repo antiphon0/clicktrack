@@ -5,6 +5,7 @@ out/
 .env
 .hintrc
 arrow-demo.html
+clicktrack.html
 clicktrack/
 src/analyzer.js
 src/audio-engine.js

@@ -862,6 +862,170 @@ function loadGame() {
   }
 }
 
+// --- Tutorial ---
+const TUTORIAL_STEPS = [
+  {
+    target: '#note-track',
+    title: 'The Note Track',
+    text: 'Notes scroll down the screen. Your goal is to press the right key when each note reaches the purple hit line at the bottom.',
+  },
+  {
+    target: '#hit-zone',
+    title: 'The Hit Zone',
+    text: 'Time your key presses here. The closer to the line, the better your accuracy: Perfect, Good, or OK.',
+  },
+  {
+    target: '#combo-display',
+    title: 'Combos',
+    text: 'Hit notes in a row to build combos. Higher combos multiply the beats you earn. Miss a note and it resets!',
+  },
+  {
+    target: '#currency-display',
+    title: 'Beats',
+    text: 'Beats are your currency. Earn them by hitting notes, then spend them on upgrades.',
+  },
+  {
+    target: '#side-tabs',
+    title: 'Tabs',
+    text: 'Use these tabs to switch between Upgrades, Dancers, Prestige, Achievements, and Stats.',
+  },
+  {
+    target: '.tab-pane.active',
+    title: 'Upgrades',
+    text: 'Spend beats to level up your keys. Higher levels mean more beats per hit. Unlock new tiers to get more lanes!',
+  },
+  {
+    target: '#listen-btn',
+    title: 'Sync Audio',
+    text: 'Click Sync Audio to play along with your own music. Notes will match the beat! Otherwise, a metronome keeps the rhythm.',
+  },
+];
+
+let tutorialStep = 0;
+let tutorialOverlay = null;
+
+function showTutorial() {
+  if (tutorialOverlay) tutorialOverlay.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'tutorial-overlay';
+  tutorialOverlay = overlay;
+
+  function renderStep() {
+    const step = TUTORIAL_STEPS[tutorialStep];
+    const targetEl = document.querySelector(step.target);
+
+    // Clear overlay
+    overlay.innerHTML = '';
+
+    // Spotlight cutout
+    if (targetEl) {
+      const rect = targetEl.getBoundingClientRect();
+      const pad = 8;
+      overlay.style.clipPath = `polygon(
+        0% 0%, 100% 0%, 100% 100%, 0% 100%, 0% 0%,
+        ${rect.left - pad}px ${rect.top - pad}px,
+        ${rect.left - pad}px ${rect.bottom + pad}px,
+        ${rect.right + pad}px ${rect.bottom + pad}px,
+        ${rect.right + pad}px ${rect.top - pad}px,
+        ${rect.left - pad}px ${rect.top - pad}px
+      )`;
+    } else {
+      overlay.style.clipPath = '';
+    }
+
+    // Tooltip
+    const tooltip = document.createElement('div');
+    tooltip.className = 'tutorial-tooltip';
+
+    // Step counter
+    const counter = document.createElement('div');
+    counter.className = 'tutorial-counter';
+    counter.textContent = `${tutorialStep + 1} / ${TUTORIAL_STEPS.length}`;
+    tooltip.appendChild(counter);
+
+    const title = document.createElement('h3');
+    title.className = 'tutorial-title';
+    title.textContent = step.title;
+    tooltip.appendChild(title);
+
+    const text = document.createElement('p');
+    text.className = 'tutorial-text';
+    text.textContent = step.text;
+    tooltip.appendChild(text);
+
+    const buttons = document.createElement('div');
+    buttons.className = 'tutorial-buttons';
+
+    const skipBtn = document.createElement('button');
+    skipBtn.className = 'tutorial-skip';
+    skipBtn.textContent = 'Skip';
+    skipBtn.addEventListener('click', closeTutorial);
+    buttons.appendChild(skipBtn);
+
+    if (tutorialStep === TUTORIAL_STEPS.length - 1) {
+      const doneBtn = document.createElement('button');
+      doneBtn.className = 'tutorial-next';
+      doneBtn.textContent = 'Got it!';
+      doneBtn.addEventListener('click', closeTutorial);
+      buttons.appendChild(doneBtn);
+    } else {
+      const nextBtn = document.createElement('button');
+      nextBtn.className = 'tutorial-next';
+      nextBtn.textContent = 'Next';
+      nextBtn.addEventListener('click', () => {
+        tutorialStep++;
+        renderStep();
+      });
+      buttons.appendChild(nextBtn);
+    }
+
+    tooltip.appendChild(buttons);
+
+    // Position tooltip relative to target
+    if (targetEl) {
+      const rect = targetEl.getBoundingClientRect();
+      const spaceBelow = window.innerHeight - rect.bottom;
+      const spaceRight = window.innerWidth - rect.right;
+      if (spaceBelow > 200) {
+        tooltip.style.top = `${rect.bottom + 16}px`;
+        tooltip.style.left = `${Math.max(16, Math.min(rect.left, window.innerWidth - 340))}px`;
+      } else if (rect.top > 200) {
+        tooltip.style.bottom = `${window.innerHeight - rect.top + 16}px`;
+        tooltip.style.left = `${Math.max(16, Math.min(rect.left, window.innerWidth - 340))}px`;
+      } else if (spaceRight > 360) {
+        tooltip.style.top = `${Math.max(16, rect.top)}px`;
+        tooltip.style.left = `${rect.right + 16}px`;
+      } else {
+        tooltip.style.top = `${Math.max(16, rect.top)}px`;
+        tooltip.style.right = `${window.innerWidth - rect.left + 16}px`;
+      }
+    } else {
+      tooltip.style.top = '50%';
+      tooltip.style.left = '50%';
+      tooltip.style.transform = 'translate(-50%, -50%)';
+    }
+
+    overlay.appendChild(tooltip);
+  }
+
+  document.body.appendChild(overlay);
+  renderStep();
+}
+
+function closeTutorial() {
+  if (tutorialOverlay) {
+    tutorialOverlay.remove();
+    tutorialOverlay = null;
+  }
+  tutorialStep = 0;
+  localStorage.setItem('clicktrack_tutorial_done', '1');
+}
+
+function shouldShowTutorial() {
+  return !localStorage.getItem('clicktrack_tutorial_done');
+}
+
 // --- Welcome Back Modal ---
 function showWelcomeBack(elapsedMs, earnings) {
   const minutes = Math.floor(elapsedMs / 60000);
@@ -933,6 +1097,11 @@ function init() {
   }
 
   startDefaultLoop();
+
+  // Show tutorial for new users
+  if (shouldShowTutorial()) {
+    setTimeout(showTutorial, 600);
+  }
 
   saveInterval = setInterval(() => {
     saveGame();
