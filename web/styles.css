@@ -654,6 +654,140 @@ body {
   background: #555;
 }
 
+/* --- Star Shop --- */
+.star-shop-heading {
+  margin: 14px 0 6px;
+  font-size: 0.85rem;
+  color: #f0c040;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.star-shop-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 10px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.06);
+  font-size: 0.82rem;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.star-shop-item.affordable {
+  border-color: rgba(240,192,64,0.3);
+  cursor: pointer;
+}
+
+.star-shop-item.affordable:hover {
+  background: rgba(240,192,64,0.08);
+}
+
+.star-shop-item.purchased {
+  opacity: 0.55;
+  border-color: rgba(68,221,119,0.3);
+}
+
+.star-shop-cost {
+  min-width: 36px;
+  text-align: right;
+  color: #f0c040;
+  font-weight: 700;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.star-shop-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.star-shop-name {
+  font-weight: 600;
+  color: #eee;
+}
+
+.star-shop-desc {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+.star-shop-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  white-space: nowrap;
+}
+
+.star-shop-badge.owned {
+  background: rgba(68,221,119,0.2);
+  color: #44dd77;
+}
+
+.star-shop-badge.buy {
+  background: rgba(240,192,64,0.2);
+  color: #f0c040;
+}
+
+.star-shop-badge.locked {
+  background: rgba(255,255,255,0.06);
+  color: #666;
+}
+
+/* --- BPM Selector --- */
+#bpm-selector {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+.bpm-btn {
+  padding: 3px 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 4px;
+  background: rgba(255,255,255,0.04);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.bpm-btn:hover {
+  background: rgba(124,92,252,0.15);
+  border-color: var(--accent);
+}
+
+.bpm-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
+.bpm-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.bpm-mult {
+  font-size: 0.6rem;
+  color: #f0c040;
+  margin-left: 2px;
+}
+
+/* --- Save Controls --- */
+#save-controls {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
 /* --- Achievements Pane --- */
 #achievement-header .hint {
   font-size: 0.75rem;

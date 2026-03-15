@@ -13,6 +13,46 @@ const ALL_KEYS = KEY_TIERS.flatMap((t) => t.keys);
 
 const OFFLINE_SONG_BPM = 90;
 
+// --- Prestige Upgrades (Star Shop) ---
+const PRESTIGE_UPGRADES = [
+  { id: 'warm_start',     name: 'Warm Start',      cost: 1,   desc: 'Start each run with 100 beats' },
+  { id: 'muscle_memory',  name: 'Muscle Memory',   cost: 2,   desc: 'Keep 10% of key levels on prestige' },
+  { id: 'rhythm_training',name: 'Rhythm Training',  cost: 3,   desc: '+25% combo multiplier' },
+  { id: 'sound_engineer', name: 'Sound Engineer',   cost: 5,   desc: 'Passive beats per note: 0.1 \u2192 0.5' },
+  { id: 'quick_fingers',  name: 'Quick Fingers',    cost: 5,   desc: 'Hit windows widened by 20%' },
+  { id: 'headliner',      name: 'Headliner',        cost: 10,  desc: 'Dancer hire cost halved' },
+  { id: 'encore',         name: 'Encore',           cost: 15,  desc: 'Combo threshold bursts pay 2x' },
+  { id: 'virtuoso',       name: 'Virtuoso',         cost: 25,  desc: 'Rare keys worth 5x instead of 3x' },
+  { id: 'big_bang',       name: 'Big Bang',         cost: 50,  desc: '2x prestige star gain' },
+  { id: 'tempo_master',   name: 'Tempo Master',     cost: 8,   desc: 'Unlock 240 and 300 BPM speeds' },
+];
+
+function hasPrestigeUpgrade(state, id) {
+  return state.prestige.purchasedUpgrades.includes(id);
+}
+
+function buyPrestigeUpgrade(state, id) {
+  const upg = PRESTIGE_UPGRADES.find(u => u.id === id);
+  if (!upg) return { state, success: false };
+  if (hasPrestigeUpgrade(state, id)) return { state, success: false };
+  if (state.prestige.stars < upg.cost) return { state, success: false };
+  state.prestige.stars -= upg.cost;
+  state.prestige.purchasedUpgrades.push(id);
+  state.prestige.multiplier = 1 + state.prestige.stars * 0.1;
+  return { state, success: true };
+}
+
+// --- BPM / Tempo Scaling ---
+const BPM_OPTIONS = [
+  { bpm: 60,  label: '60 BPM',  mult: 0.5 },
+  { bpm: 90,  label: '90 BPM',  mult: 1.0 },
+  { bpm: 120, label: '120 BPM', mult: 1.5 },
+  { bpm: 150, label: '150 BPM', mult: 2.5 },
+  { bpm: 180, label: '180 BPM', mult: 4.0 },
+  { bpm: 240, label: '240 BPM', mult: 6.0,  requiresUpgrade: 'tempo_master' },
+  { bpm: 300, label: '300 BPM', mult: 10.0, requiresUpgrade: 'tempo_master' },
+];
+
 // Combo threshold bonuses: at these streak counts, award a burst payout
 const COMBO_THRESHOLDS = [10, 25, 50, 100, 250, 500, 1000];
 
@@ -60,6 +100,7 @@ function createDefaultState() {
       level: 1,
     },
     achievements: [],
+    selectedBPM: 90,
     lastSaveTime: null,
   };
 }
@@ -68,24 +109,29 @@ function getKeyUpgradeCost(level) {
   return Math.floor(10 * Math.pow(1.15, level - 1));
 }
 
-// Rare (non-WASD) keys are worth 3× more per hit
+// Rare (non-WASD) keys are worth 3× more per hit (5× with Virtuoso)
 const KEY_VALUE_BONUS = { q: 3, e: 3, z: 3, x: 3, c: 3 };
 
 function getKeyValue(state, key) {
   const keyState = state.keys[key];
   if (!keyState || !keyState.unlocked) return 0;
-  return keyState.level * state.prestige.multiplier * getAchievementMultiplier(state) * (KEY_VALUE_BONUS[key] || 1);
+  let bonus = KEY_VALUE_BONUS[key] || 1;
+  if (bonus > 1 && hasPrestigeUpgrade(state, 'virtuoso')) bonus = 5;
+  return keyState.level * state.prestige.multiplier * getAchievementMultiplier(state) * bonus;
 }
 
-function getComboMultiplier(combo) {
-  if (combo < 10) return 1;
-  if (combo < 25) return 1.5;
-  if (combo < 50) return 2;
-  if (combo < 100) return 3;
-  if (combo < 250) return 5;
-  if (combo < 500) return 8;
-  if (combo < 1000) return 12;
-  return 20;
+function getComboMultiplier(combo, state) {
+  let base;
+  if (combo < 10) base = 1;
+  else if (combo < 25) base = 1.5;
+  else if (combo < 50) base = 2;
+  else if (combo < 100) base = 3;
+  else if (combo < 250) base = 5;
+  else if (combo < 500) base = 8;
+  else if (combo < 1000) base = 12;
+  else base = 20;
+  if (state && hasPrestigeUpgrade(state, 'rhythm_training')) base *= 1.25;
+  return base;
 }
 
 function getTierUnlockCost(tier) {
@@ -104,13 +150,14 @@ function processTap(state, key, accuracy = 'perfect') {
   state.stats.totalTaps++;
 
   const baseValue = getKeyValue(state, key);
-  const comboMult = getComboMultiplier(keyState.combo);
+  const comboMult = getComboMultiplier(keyState.combo, state);
   const accuracyMult = ACCURACY_MULTIPLIERS[accuracy] || 1;
   let earned = baseValue * comboMult * accuracyMult;
 
   // Check combo threshold bonuses
   if (COMBO_THRESHOLDS.includes(keyState.combo)) {
-    const burst = baseValue * keyState.combo * state.offlineSong.comboBonus;
+    let burst = baseValue * keyState.combo * state.offlineSong.comboBonus;
+    if (hasPrestigeUpgrade(state, 'encore')) burst *= 2;
     earned += burst;
   }
 
@@ -214,8 +261,10 @@ function unlockTier(state) {
 }
 
 // --- Auto-Dancers ---
-function getDancerHireCost(count) {
-  return Math.floor(50 * Math.pow(2, count));
+function getDancerHireCost(count, state) {
+  let cost = Math.floor(50 * Math.pow(2, count));
+  if (state && hasPrestigeUpgrade(state, 'headliner')) cost = Math.floor(cost * 0.5);
+  return cost;
 }
 
 function getDancerUpgradeCost(level) {
@@ -231,7 +280,7 @@ function getDancerAccuracy(level) {
 }
 
 function hireDancer(state) {
-  const cost = getDancerHireCost(state.dancers.count);
+  const cost = getDancerHireCost(state.dancers.count, state);
   if (state.currency < cost) return { state, success: false };
   state.currency -= cost;
   state.dancers.count++;
@@ -248,26 +297,47 @@ function upgradeDancers(state) {
 }
 
 // --- Prestige ---
-function getPrestigeGain(totalEarned) {
+function getPrestigeGain(totalEarned, state) {
   if (totalEarned < 1000) return 0;
-  return Math.floor(Math.sqrt(totalEarned / 1000));
+  let gain = Math.floor(Math.sqrt(totalEarned / 1000));
+  if (state && hasPrestigeUpgrade(state, 'big_bang')) gain *= 2;
+  return gain;
 }
 
 function performPrestige(state) {
-  const gain = getPrestigeGain(state.totalEarned);
+  const gain = getPrestigeGain(state.totalEarned, state);
   if (gain <= 0) return { state, success: false };
 
   state.prestige.count++;
   state.prestige.stars += gain;
   state.prestige.multiplier = 1 + state.prestige.stars * 0.1;
 
+  // Muscle Memory: keep 10% of key levels
+  const keepLevels = hasPrestigeUpgrade(state, 'muscle_memory');
+
   // Reset run-specific progress
+  const oldKeys = state.keys;
   state.currency = 0;
   state.totalEarned = 0;
   state.tierUnlocked = 1;
   state.keys = createDefaultKeyState();
   state.dancers = { count: 0, level: 1 };
   state.stats = { totalTaps: 0, totalMisses: 0, bestCombo: 0, songsPlayed: 0 };
+
+  // Warm Start: begin with 100 beats
+  if (hasPrestigeUpgrade(state, 'warm_start')) {
+    state.currency = 100;
+    state.totalEarned = 100;
+  }
+
+  // Muscle Memory: restore 10% of old key levels (min 1)
+  if (keepLevels) {
+    for (const key of Object.keys(oldKeys)) {
+      if (state.keys[key]) {
+        state.keys[key].level = Math.max(1, Math.floor(oldKeys[key].level * 0.1));
+      }
+    }
+  }
 
   return { state, success: true };
 }
@@ -304,6 +374,9 @@ const ACHIEVEMENTS = [
   { id: 'prestige_10',   name: 'Veteran',           desc: 'Prestige 10 times',           check: s => s.prestige.count >= 10 },
   { id: 'stars_10',      name: 'Starry Night',      desc: 'Accumulate 10 stars',         check: s => (s.prestige.stars ?? 0) >= 10 },
   { id: 'stars_50',      name: 'Constellation',     desc: 'Accumulate 50 stars',         check: s => (s.prestige.stars ?? 0) >= 50 },
+  // Star Shop
+  { id: 'first_upgrade',  name: 'Shopper',           desc: 'Buy your first star upgrade',  check: s => (s.prestige.purchasedUpgrades?.length ?? 0) >= 1 },
+  { id: 'five_upgrades',  name: 'Collector',         desc: 'Buy 5 star upgrades',          check: s => (s.prestige.purchasedUpgrades?.length ?? 0) >= 5 },
 ];
 
 function checkAchievements(state) {
@@ -379,6 +452,10 @@ if (typeof module !== 'undefined') {
     upgradeDancers,
     getPrestigeGain,
     performPrestige,
+    PRESTIGE_UPGRADES,
+    hasPrestigeUpgrade,
+    buyPrestigeUpgrade,
+    BPM_OPTIONS,
     ACHIEVEMENTS,
     checkAchievements,
     getAchievementMultiplier,
@@ -411,6 +488,10 @@ if (typeof module !== 'undefined') {
     upgradeDancers,
     getPrestigeGain,
     performPrestige,
+    PRESTIGE_UPGRADES,
+    hasPrestigeUpgrade,
+    buyPrestigeUpgrade,
+    BPM_OPTIONS,
     ACHIEVEMENTS,
     checkAchievements,
     getAchievementMultiplier,

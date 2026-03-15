@@ -27,6 +27,7 @@
           </div>
           <span id="beat-counter" class="hint">Metronome mode &mdash; click Sync Audio to play with your music</span>
         </div>
+        <div id="bpm-selector"></div>
       </div>
 
       <!-- Note Track (Guitar Hero style) -->
@@ -101,6 +102,8 @@
             Prestige for <span id="prestige-gain">0</span> &#11088;
           </button>
           <p class="hint" id="prestige-hint">Earn 1,000 total beats to unlock prestige</p>
+          <h3 class="star-shop-heading">Star Shop</h3>
+          <div id="star-shop"></div>
         </div>
 
         <!-- Achievements -->
@@ -112,6 +115,10 @@
         <!-- Stats -->
         <div id="stats" class="tab-pane" data-tab="stats">
           <div id="stats-content"></div>
+          <div id="save-controls">
+            <button id="export-save-btn" class="btn btn-small btn-secondary">Export Save</button>
+            <button id="import-save-btn" class="btn btn-small btn-secondary">Import Save</button>
+          </div>
         </div>
       </div>
     </div>

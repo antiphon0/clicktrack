@@ -23,7 +23,8 @@ let lastOnsetTime = 0;
 let totalBeatsDetected = 0;
 
 // Default song (always-on metronome when no audio is detected)
-const DEFAULT_BPM = 90;
+let currentBPM = 90;
+let bpmEarningsMult = 1.0;
 let lastDefaultBeatTime = 0;
 
 // Grace period — notes spawned in the first few seconds don't penalize
@@ -32,17 +33,17 @@ let gameStartTime = 0;
 
 // Note track
 const SCROLL_TIME_MS = 2500;   // notes take 2.5s to scroll top → hit zone
-const HIT_PERFECT_MS = 80;     // ±80ms = perfect
-const HIT_GOOD_MS = 160;       // ±160ms = good
-const HIT_OK_MS = 280;         // ±280ms = ok
-const MISS_THRESHOLD_MS = 380; // past hit zone by this → miss
+let HIT_PERFECT_MS = 80;     // ±80ms = perfect
+let HIT_GOOD_MS = 160;       // ±160ms = good
+let HIT_OK_MS = 280;         // ±280ms = ok
+let MISS_THRESHOLD_MS = 380; // past hit zone by this → miss
 let activeNotes = [];
 let noteIdCounter = 0;
 
 // Combo & accuracy
 let comboStreak = 0;
 let accuracyCounts = { perfect: 0, good: 0, ok: 0, miss: 0 };
-const PASSIVE_PER_BEAT = 0.1;
+let PASSIVE_PER_BEAT = 0.1;
 
 // --- Dancers ---
 let dancerCooldowns = [];
@@ -364,7 +365,7 @@ function spawnNote(now) {
 function gameLoop() {
   const now = performance.now();
 
-  const beatIntervalMs = (60 / DEFAULT_BPM) * 1000;
+  const beatIntervalMs = (60 / currentBPM) * 1000;
   const audioOnset = isListening && detectOnset();
   const defaultBeat = !audioOnset && (now - lastDefaultBeatTime >= beatIntervalMs);
 
@@ -373,7 +374,7 @@ function gameLoop() {
     totalBeatsDetected++;
     beatCounterEl.textContent = totalBeatsDetected + ' beats';
 
-    const passive = PASSIVE_PER_BEAT * state.prestige.multiplier;
+    const passive = PASSIVE_PER_BEAT * state.prestige.multiplier * bpmEarningsMult;
     state.currency += passive;
     state.totalEarned += passive;
     updateCurrency();
@@ -494,6 +495,13 @@ function onKeyPress(key) {
 
   comboStreak++;
   const result = processTap(state, key, accuracy);
+  // Apply BPM earnings multiplier
+  if (bpmEarningsMult !== 1) {
+    const bonus = result.earned * (bpmEarningsMult - 1);
+    state.currency += bonus;
+    state.totalEarned += bonus;
+    result.earned *= bpmEarningsMult;
+  }
   showFeedback(accuracy, result.earned);
   accuracyCounts[accuracy]++;
 
@@ -518,7 +526,7 @@ function updateDancerPanel() {
   if (!state.dancers) return;
   const { count, level } = state.dancers;
 
-  const hireCost = getDancerHireCost(count);
+  const hireCost = getDancerHireCost(count, state);
   hireDancerCostEl.textContent = formatNumber(hireCost);
   hireDancerBtn.disabled = state.currency < hireCost;
 
@@ -562,10 +570,18 @@ function autoDancerHit(note) {
   }, 150);
   comboStreak++;
   const result = processTap(state, note.key, accuracy);
-  const penalty = result.earned * (1 - DANCER_EARN_PENALTY);
+  // Apply BPM multiplier first
+  let earned = result.earned * bpmEarningsMult;
+  if (bpmEarningsMult !== 1) {
+    const bonus = result.earned * (bpmEarningsMult - 1);
+    state.currency += bonus;
+    state.totalEarned += bonus;
+  }
+  // Dancer penalty
+  const penalty = earned * (1 - DANCER_EARN_PENALTY);
   state.currency -= penalty;
   state.totalEarned -= penalty;
-  showFeedback(accuracy, result.earned - penalty);
+  showFeedback(accuracy, earned - penalty);
   accuracyCounts[accuracy]++;
   updateCurrency();
   updateCombo();
@@ -602,7 +618,7 @@ function updateCurrency() {
     unlockTierBtn.disabled = state.currency < nextTierDef.unlockCost;
   }
   if (state.dancers) {
-    hireDancerBtn.disabled = state.currency < getDancerHireCost(state.dancers.count);
+    hireDancerBtn.disabled = state.currency < getDancerHireCost(state.dancers.count, state);
     if (state.dancers.level < 3) {
       upgradeDancerBtn.disabled = state.currency < getDancerUpgradeCost(state.dancers.level);
     }
@@ -619,7 +635,7 @@ function updateCurrency() {
 
 function updateCombo() {
   comboCountEl.textContent = comboStreak;
-  comboMultEl.textContent = '\u00d7' + getComboMultiplier(comboStreak);
+  comboMultEl.textContent = '\u00d7' + getComboMultiplier(comboStreak, state);
 }
 
 // Lightweight refresh: update cost/label/affordability on existing upgrade rows without full rebuild
@@ -728,12 +744,16 @@ function updateUpgrades() {
 }
 
 function updateStats() {
+  const bpmLabel = currentBPM + ' BPM (' + bpmEarningsMult + 'x)';
   statsContentEl.innerHTML = `
     <div class="stat-row"><span class="stat-label">Hits</span><span class="stat-value">${formatNumber(state.stats.totalTaps)}</span></div>
     <div class="stat-row"><span class="stat-label">Total earned</span><span class="stat-value">${formatNumber(state.totalEarned)}</span></div>
     <div class="stat-row"><span class="stat-label">Best combo</span><span class="stat-value">${state.stats.bestCombo}</span></div>
     <div class="stat-row"><span class="stat-label">Keys unlocked</span><span class="stat-value">${getUnlockedKeys().length} / ${ALL_KEYS.length}</span></div>
     <div class="stat-row"><span class="stat-label">Tier</span><span class="stat-value">${state.tierUnlocked} / ${KEY_TIERS.length}</span></div>
+    <div class="stat-row"><span class="stat-label">Tempo</span><span class="stat-value">${bpmLabel}</span></div>
+    <div class="stat-row"><span class="stat-label">Prestiges</span><span class="stat-value">${state.prestige.count}</span></div>
+    <div class="stat-row"><span class="stat-label">Star upgrades</span><span class="stat-value">${state.prestige.purchasedUpgrades.length} / ${PRESTIGE_UPGRADES.length}</span></div>
   `;
 }
 
@@ -741,7 +761,7 @@ function updatePrestigePanel() {
   const stars = state.prestige.stars || 0;
   const mult = state.prestige.multiplier || 1;
   const count = state.prestige.count || 0;
-  const pending = getPrestigeGain(state.totalEarned);
+  const pending = getPrestigeGain(state.totalEarned, state);
 
   prestigeStarsEl.textContent = formatNumber(stars);
   prestigeMultiplierEl.textContent = mult.toFixed(1) + 'x';
@@ -873,7 +893,7 @@ upgradeDancerBtn.addEventListener('click', () => {
 });
 
 prestigeBtn.addEventListener('click', () => {
-  const gain = getPrestigeGain(state.totalEarned);
+  const gain = getPrestigeGain(state.totalEarned, state);
   if (gain <= 0) return;
   if (!confirm(`Prestige for ${gain} star${gain !== 1 ? 's' : ''}? This resets your keys, currency, dancers, and tiers.`)) return;
   const result = performPrestige(state);
@@ -887,6 +907,7 @@ prestigeBtn.addEventListener('click', () => {
     updateUpgrades();
     updateDancerPanel();
     updatePrestigePanel();
+    updateStarShop();
     updateStats();
     updateCombo();
     updateAccuracy();
@@ -894,6 +915,10 @@ prestigeBtn.addEventListener('click', () => {
     saveGame();
   }
 });
+
+// --- Export/Import Buttons ---
+document.getElementById('export-save-btn').addEventListener('click', exportSave);
+document.getElementById('import-save-btn').addEventListener('click', importSave);
 
 // --- Save/Load (localStorage) ---
 const SAVE_KEY = 'clicktrack-save';
@@ -913,6 +938,147 @@ function loadGame() {
     if (saved) state = JSON.parse(saved);
   } catch (e) {
     console.warn('Load failed:', e);
+  }
+}
+
+// --- Apply prestige upgrade side-effects ---
+function applyPrestigeEffects() {
+  // Sound Engineer: passive 0.1 -> 0.5
+  PASSIVE_PER_BEAT = hasPrestigeUpgrade(state, 'sound_engineer') ? 0.5 : 0.1;
+
+  // Quick Fingers: widen hit windows by 20%
+  if (hasPrestigeUpgrade(state, 'quick_fingers')) {
+    HIT_PERFECT_MS = 96;
+    HIT_GOOD_MS = 192;
+    HIT_OK_MS = 336;
+    MISS_THRESHOLD_MS = 456;
+  } else {
+    HIT_PERFECT_MS = 80;
+    HIT_GOOD_MS = 160;
+    HIT_OK_MS = 280;
+    MISS_THRESHOLD_MS = 380;
+  }
+
+  // Restore BPM from state
+  if (state.selectedBPM) {
+    const opt = BPM_OPTIONS.find(o => o.bpm === state.selectedBPM);
+    if (opt) {
+      currentBPM = opt.bpm;
+      bpmEarningsMult = opt.mult;
+    }
+  }
+}
+
+// --- Star Shop ---
+function updateStarShop() {
+  const container = document.getElementById('star-shop');
+  if (!container) return;
+  container.innerHTML = '';
+
+  for (const upg of PRESTIGE_UPGRADES) {
+    const owned = hasPrestigeUpgrade(state, upg.id);
+    const canAfford = !owned && state.prestige.stars >= upg.cost;
+    const locked = upg.requiresUpgrade && !hasPrestigeUpgrade(state, upg.requiresUpgrade);
+
+    const div = document.createElement('div');
+    div.className = 'star-shop-item' + (owned ? ' purchased' : '') + (canAfford && !locked ? ' affordable' : '');
+    div.innerHTML = `
+      <span class="star-shop-cost">${upg.cost} \u2b50</span>
+      <div class="star-shop-info">
+        <div class="star-shop-name">${upg.name}</div>
+        <div class="star-shop-desc">${upg.desc}</div>
+      </div>
+      <span class="star-shop-badge ${owned ? 'owned' : canAfford && !locked ? 'buy' : 'locked'}">${owned ? 'OWNED' : canAfford && !locked ? 'BUY' : '\u{1F512}'}</span>
+    `;
+
+    if (canAfford && !locked) {
+      div.addEventListener('click', () => {
+        const result = buyPrestigeUpgrade(state, upg.id);
+        if (result.success) {
+          state = result.state;
+          applyPrestigeEffects();
+          updatePrestigePanel();
+          updateStarShop();
+          buildBPMSelector();
+          saveGame();
+        }
+      });
+    }
+    container.appendChild(div);
+  }
+}
+
+// --- BPM Selector ---
+function buildBPMSelector() {
+  const container = document.getElementById('bpm-selector');
+  if (!container) return;
+  container.innerHTML = '';
+
+  for (const opt of BPM_OPTIONS) {
+    const locked = opt.requiresUpgrade && !hasPrestigeUpgrade(state, opt.requiresUpgrade);
+    const btn = document.createElement('button');
+    btn.className = 'bpm-btn' + (currentBPM === opt.bpm ? ' active' : '');
+    btn.disabled = locked;
+    btn.innerHTML = opt.label + (opt.mult !== 1 ? `<span class="bpm-mult">${opt.mult}x</span>` : '');
+
+    if (!locked) {
+      btn.addEventListener('click', () => {
+        currentBPM = opt.bpm;
+        bpmEarningsMult = opt.mult;
+        state.selectedBPM = opt.bpm;
+        buildBPMSelector();
+        saveGame();
+      });
+    }
+    container.appendChild(btn);
+  }
+}
+
+// --- Export / Import ---
+function exportSave() {
+  try {
+    state.lastSaveTime = Date.now();
+    const json = JSON.stringify(state);
+    const encoded = btoa(unescape(encodeURIComponent(json)));
+    navigator.clipboard.writeText(encoded).then(() => {
+      showFeedback('perfect', 0);
+      const el = document.getElementById('tap-feedback');
+      if (el) { el.textContent = 'Save copied to clipboard!'; el.className = 'feedback-perfect'; }
+    }).catch(() => {
+      prompt('Copy this save string:', encoded);
+    });
+  } catch (e) {
+    console.warn('Export failed:', e);
+  }
+}
+
+function importSave() {
+  const input = prompt('Paste your save string:');
+  if (!input || !input.trim()) return;
+  try {
+    const json = decodeURIComponent(escape(atob(input.trim())));
+    const imported = JSON.parse(json);
+    if (!imported.keys || !imported.prestige) {
+      alert('Invalid save data.');
+      return;
+    }
+    state = imported;
+    applyPrestigeEffects();
+    syncDancerCooldowns();
+    rebuildLanes();
+    updateCurrency();
+    updateUpgrades();
+    updateDancerPanel();
+    updatePrestigePanel();
+    updateStarShop();
+    updateAchievementsPanel();
+    updateStats();
+    buildBPMSelector();
+    saveGame();
+    const el = document.getElementById('tap-feedback');
+    if (el) { el.textContent = 'Save imported!'; el.className = 'feedback-perfect'; }
+  } catch (e) {
+    alert('Failed to import save. Make sure you pasted the full string.');
   }
 }
 
@@ -1111,7 +1277,9 @@ function init() {
   if (state.prestige.stars === undefined) state.prestige.stars = 0;
   if (!state.prestige.purchasedUpgrades) state.prestige.purchasedUpgrades = [];
   if (!state.achievements) state.achievements = [];
+  if (!state.selectedBPM) state.selectedBPM = 90;
   syncDancerCooldowns();
+  applyPrestigeEffects();
 
   // Offline progress
   if (state.lastSaveTime) {
@@ -1131,10 +1299,12 @@ function init() {
   updateUpgrades();
   updateDancerPanel();
   updatePrestigePanel();
+  updateStarShop();
   updateAchievementsPanel();
   updateStats();
   updateAccuracy();
   updateCombo();
+  buildBPMSelector();
   listenBtn.style.display = '';
 
   // Onboarding hint
