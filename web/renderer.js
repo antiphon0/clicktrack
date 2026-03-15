@@ -582,6 +582,8 @@ function onNoteMiss(note) {
 }
 
 // --- UI ---
+let lastUpgradeRefreshCurrency = -1;
+
 function updateCurrency() {
   currencyEl.textContent = formatNumber(state.currency);
 
@@ -597,11 +599,54 @@ function updateCurrency() {
     }
   }
   updatePrestigePanel();
+
+  // Refresh upgrade rows when currency crosses an upgrade cost threshold
+  const rounded = Math.floor(state.currency);
+  if (rounded !== lastUpgradeRefreshCurrency) {
+    lastUpgradeRefreshCurrency = rounded;
+    refreshUpgradeAffordability();
+  }
 }
 
 function updateCombo() {
   comboCountEl.textContent = comboStreak;
   comboMultEl.textContent = '\u00d7' + getComboMultiplier(comboStreak);
+}
+
+// Lightweight refresh: update cost/label/affordability on existing upgrade rows without full rebuild
+function refreshUpgradeAffordability() {
+  const rows = keyUpgradesEl.querySelectorAll('.key-upgrade');
+  for (const row of rows) {
+    const key = row.dataset.key;
+    if (!key) continue;
+    const ks = state.keys[key];
+    if (!ks) continue;
+
+    let count, cost, label;
+    if (buyMode === 'Max') {
+      count = getMaxAffordableUpgrades(state, key);
+      cost = count > 0 ? getBulkUpgradeCost(ks.level, count) : getKeyUpgradeCost(ks.level);
+      label = count > 0 ? `MAX (${count})` : '\u{1F512}';
+    } else {
+      count = parseInt(buyMode);
+      cost = getBulkUpgradeCost(ks.level, count);
+      label = state.currency >= cost ? `UPGRADE ${buyMode}` : '\u{1F512}';
+    }
+    const canAfford = buyMode === 'Max' ? count > 0 : state.currency >= cost;
+
+    const costEl = row.querySelector('.key-upgrade-cost');
+    const actionEl = row.querySelector('.key-upgrade-action');
+    if (costEl) costEl.textContent = formatNumber(cost) + ' beats';
+    if (actionEl) actionEl.textContent = label;
+
+    const wasAffordable = row.classList.contains('affordable');
+    if (canAfford !== wasAffordable) {
+      row.classList.toggle('affordable', canAfford);
+      // Re-attach or remove click handler by triggering a full rebuild
+      updateUpgrades();
+      return;
+    }
+  }
 }
 
 function updateUpgrades() {
