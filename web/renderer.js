@@ -158,15 +158,17 @@ function rebuildLanes() {
   }
 }
 
-// --- Audio Capture (system audio via getDisplayMedia) ---
+// --- Audio Capture (system audio via getDisplayMedia, mic fallback) ---
 async function startCapture() {
   if (isListening) stopListening();
 
   listenBtn.style.display = 'none';
   beatCounterEl.textContent = 'Pick a tab playing music and check "Share audio"';
 
+  let stream = null;
+
   try {
-    const stream = await navigator.mediaDevices.getDisplayMedia({
+    stream = await navigator.mediaDevices.getDisplayMedia({
       video: true,
       audio: true,
     });
@@ -175,11 +177,33 @@ async function startCapture() {
     stream.getVideoTracks().forEach((t) => t.stop());
 
     if (stream.getAudioTracks().length === 0) {
-      beatCounterEl.textContent = 'No audio — make sure to check "Share audio"';
+      stream = null;
+    }
+  } catch (e) {
+    console.warn('getDisplayMedia failed, trying mic fallback:', e.message);
+    stream = null;
+  }
+
+  // Fallback: microphone input (captures system audio via stereo mix / loopback)
+  if (!stream) {
+    try {
+      beatCounterEl.textContent = 'Trying microphone...';
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    } catch (e2) {
+      console.error('All audio capture failed:', e2);
+      beatCounterEl.textContent = 'Audio capture failed — using metronome';
       listenBtn.style.display = '';
       return;
     }
+  }
 
+  if (!stream || stream.getAudioTracks().length === 0) {
+    beatCounterEl.textContent = 'No audio — using metronome';
+    listenBtn.style.display = '';
+    return;
+  }
+
+  try {
     audioContext = new AudioContext();
     await audioContext.resume();
 
@@ -204,8 +228,8 @@ async function startCapture() {
 
     if (!animFrameId) gameLoop();
   } catch (e) {
-    console.error('Audio capture failed:', e);
-    beatCounterEl.textContent = 'Capture cancelled — using metronome';
+    console.error('Audio setup failed:', e);
+    beatCounterEl.textContent = 'Audio error — using metronome';
     listenBtn.style.display = '';
   }
 }
