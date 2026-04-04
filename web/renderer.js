@@ -55,6 +55,38 @@ const CHORD_MAP = {
 const CHORD_WINDOW_MS = 80;
 let pendingCardinal = null; // { key, timestamp, timerId }
 
+// --- Input method detection ---
+const INPUT_HISTORY_SIZE = 5;
+let recentInputCodes = []; // raw e.code values
+let detectedInputMethod = 'keyboard'; // 'keyboard' | 'arrows' | 'numpad'
+
+const DISPLAY_NAMES = {
+  keyboard: { w: 'W', a: 'A', s: 'S', d: 'D', q: 'Q', e: 'E', z: 'Z', c: 'C' },
+  arrows:   { w: '\u2191', a: '\u2190', s: '\u2193', d: '\u2192', q: '\u2196', e: '\u2197', z: '\u2199', c: '\u2198' },
+  numpad:   { w: '8', a: '4', s: '5', d: '6', q: '7', e: '9', z: '1', c: '3' },
+};
+
+function getKeyDisplayName(key) {
+  return DISPLAY_NAMES[detectedInputMethod]?.[key] ?? key.toUpperCase();
+}
+
+function detectInputMethod() {
+  if (recentInputCodes.length === 0) return;
+  const arrowCodes = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+  const numpadCodes = ['Numpad1', 'Numpad2', 'Numpad3', 'Numpad4', 'Numpad5', 'Numpad6', 'Numpad7', 'Numpad8', 'Numpad9'];
+  const arrows = recentInputCodes.filter(c => arrowCodes.includes(c)).length;
+  const numpads = recentInputCodes.filter(c => numpadCodes.includes(c)).length;
+  const letters = recentInputCodes.length - arrows - numpads;
+  const prev = detectedInputMethod;
+  if (arrows > letters && arrows >= numpads) detectedInputMethod = 'arrows';
+  else if (numpads > letters && numpads > arrows) detectedInputMethod = 'numpad';
+  else detectedInputMethod = 'keyboard';
+  if (detectedInputMethod !== prev) {
+    updateUpgrades();
+    updateLaneLabels();
+  }
+}
+
 // --- Dancers ---
 let dancerCooldowns = [];
 
@@ -195,11 +227,36 @@ function rebuildLanes() {
     const label = document.createElement('div');
     label.className = `lane-label lane-label-key-${key}`;
     label.dataset.key = key;
-    const labelArrow = createArrowEl(key, true);
-    labelArrow.classList.add('label-arrow');
-    label.appendChild(labelArrow);
+    if (detectedInputMethod === 'keyboard') {
+      const labelArrow = createArrowEl(key, true);
+      labelArrow.classList.add('label-arrow');
+      label.appendChild(labelArrow);
+    } else {
+      const txt = document.createElement('span');
+      txt.className = 'lane-label-text';
+      txt.textContent = getKeyDisplayName(key);
+      label.appendChild(txt);
+    }
     laneLabels.appendChild(label);
   }
+}
+
+function updateLaneLabels() {
+  const labels = laneLabels.querySelectorAll('.lane-label');
+  labels.forEach((label) => {
+    const key = label.dataset.key;
+    label.innerHTML = '';
+    if (detectedInputMethod === 'keyboard') {
+      const labelArrow = createArrowEl(key, true);
+      labelArrow.classList.add('label-arrow');
+      label.appendChild(labelArrow);
+    } else {
+      const txt = document.createElement('span');
+      txt.className = 'lane-label-text';
+      txt.textContent = getKeyDisplayName(key);
+      label.appendChild(txt);
+    }
+  });
 }
 
 // --- Audio Setup Guide ---
@@ -805,7 +862,7 @@ function updateUpgrades() {
     div.className = 'key-upgrade' + (canAfford ? ' affordable' : '');
     div.dataset.key = key;
     div.innerHTML = `
-      <span class="key-upgrade-label">${key.toUpperCase()}</span>
+      <span class="key-upgrade-label">${getKeyDisplayName(key)}</span>
       <span class="key-upgrade-info">
         <span class="key-upgrade-level">Level ${ks.level}</span>
         <span class="key-upgrade-cost">${formatNumber(cost)} beats</span>
@@ -948,16 +1005,21 @@ document.addEventListener('keydown', (e) => {
     'ArrowLeft':  'a', 'ArrowUp':  'w', 'ArrowDown': 's', 'ArrowRight': 'd',
     'Numpad7': 'q', 'Numpad8': 'w', 'Numpad9': 'e',
     'Numpad4': 'a', 'Numpad5': 's', 'Numpad6': 'd',
-    'Numpad1': 'z', 'Numpad2': 'x', 'Numpad3': 'c',
+    'Numpad1': 'z', 'Numpad3': 'c',
     '7': 'q', '8': 'w', '9': 'e',
     '4': 'a', '5': 's', '6': 'd',
-    '1': 'z', '2': 'x', '3': 'c',
+    '1': 'z', '3': 'c',
   };
 
   const key = KEY_MAP[e.code] || KEY_MAP[e.key] || e.key.toLowerCase();
 
   if (ALL_KEYS.includes(key)) {
     e.preventDefault();
+
+    // Track input method
+    recentInputCodes.push(e.code);
+    if (recentInputCodes.length > INPUT_HISTORY_SIZE) recentInputCodes.shift();
+    detectInputMethod();
 
     const cardinals = ['w', 'a', 's', 'd'];
     const isCardinal = cardinals.includes(key);
@@ -1463,7 +1525,7 @@ function init() {
   if (noteTrack && !document.getElementById('onboarding-hint')) {
     const hint = document.createElement('div');
     hint.id = 'onboarding-hint';
-    hint.textContent = 'Press W when notes reach the line';
+    hint.textContent = 'Press ' + getKeyDisplayName('w') + ' when notes reach the line';
     hint.style.cssText = 'position:absolute;top:40%;left:50%;transform:translate(-50%,-50%);color:rgba(255,255,255,0.6);font-size:1.1rem;letter-spacing:0.05em;pointer-events:none;z-index:10;text-align:center;';
     noteTrack.style.position = 'relative';
     noteTrack.appendChild(hint);
