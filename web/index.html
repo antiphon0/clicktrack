@@ -22,10 +22,52 @@
         <div id="status-row">
           <button id="listen-btn" class="btn btn-small btn-secondary">&#127925; Sync Audio</button>
           <button id="stop-btn" class="btn btn-small btn-secondary" style="display:none;">&#9632; Stop</button>
+          <button id="audio-help-btn" class="btn-icon" title="Audio setup help">?</button>
           <div id="vu-meter">
             <div id="vu-fill"></div>
           </div>
-          <span id="beat-counter" class="hint">Metronome mode &mdash; click Sync Audio to play with your music</span>
+          <span id="beat-counter" class="hint">Metronome mode - click Sync Audio to play with your music</span>
+        </div>
+        <div id="audio-guide" style="display:none;">
+          <div id="audio-guide-steps">
+            <div class="guide-step active" data-step="1">
+              <span class="guide-step-num">1</span>
+              <div class="guide-step-content">
+                <strong>Start your music</strong>
+                <p>Open a tab with music playing (Spotify, YouTube, SoundCloud, etc.)</p>
+              </div>
+            </div>
+            <div class="guide-step" data-step="2">
+              <span class="guide-step-num">2</span>
+              <div class="guide-step-content">
+                <strong>Click "Sync Audio"</strong>
+                <p>Chrome will show a tab picker dialog</p>
+              </div>
+            </div>
+            <div class="guide-step" data-step="3">
+              <span class="guide-step-num">3</span>
+              <div class="guide-step-content">
+                <strong>Select the music tab</strong>
+                <p>Pick the <em>tab</em> with your music (not "Window" or "Screen")</p>
+              </div>
+            </div>
+            <div class="guide-step" data-step="4">
+              <span class="guide-step-num">4</span>
+              <div class="guide-step-content">
+                <strong>Check "Share audio"</strong>
+                <p>The checkbox at the bottom-left of the picker - this is the critical step!</p>
+              </div>
+            </div>
+            <div class="guide-step" data-step="5">
+              <span class="guide-step-num">5</span>
+              <div class="guide-step-content">
+                <strong>Click "Share"</strong>
+                <p>The VU meter should start bouncing and notes will sync to the beat</p>
+              </div>
+            </div>
+          </div>
+          <div id="audio-guide-status"></div>
+          <button id="audio-guide-close" class="btn btn-small btn-secondary">Got it</button>
         </div>
         <div id="bpm-selector"></div>
       </div>

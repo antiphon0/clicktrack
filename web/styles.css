@@ -954,4 +954,145 @@ body {
   filter: brightness(1.15);
 }
 
+/* Audio Setup Guide */
+.btn-icon {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text-dim);
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  flex-shrink: 0;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.btn-icon:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+#audio-guide {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+#audio-guide-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.guide-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  opacity: 0.45;
+  transition: opacity 0.25s, border-color 0.25s, background 0.25s;
+}
+
+.guide-step.active {
+  opacity: 1;
+  border-color: var(--accent);
+  background: rgba(124, 92, 252, 0.08);
+}
+
+.guide-step.done {
+  opacity: 0.7;
+  border-color: var(--hit);
+}
+
+.guide-step-num {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--border);
+  color: var(--text-dim);
+  font-size: 0.75rem;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.guide-step.active .guide-step-num {
+  background: var(--accent);
+  color: #fff;
+}
+
+.guide-step.done .guide-step-num {
+  background: var(--hit);
+  color: #111;
+}
+
+.guide-step.done .guide-step-num::after {
+  content: '\2713';
+}
+
+.guide-step.done .guide-step-num {
+  font-size: 0;
+}
+
+.guide-step.done .guide-step-num::after {
+  font-size: 0.75rem;
+}
+
+.guide-step-content strong {
+  font-size: 0.85rem;
+  color: var(--text);
+}
+
+.guide-step-content p {
+  font-size: 0.78rem;
+  color: var(--text-dim);
+  margin-top: 2px;
+  line-height: 1.35;
+}
+
+#audio-guide-status {
+  font-size: 0.82rem;
+  padding: 6px 10px;
+  border-radius: 6px;
+  margin-bottom: 8px;
+  display: none;
+}
+
+#audio-guide-status.status-ok {
+  display: block;
+  background: rgba(92, 252, 124, 0.1);
+  color: var(--hit);
+  border: 1px solid rgba(92, 252, 124, 0.25);
+}
+
+#audio-guide-status.status-warn {
+  display: block;
+  background: rgba(252, 208, 92, 0.1);
+  color: var(--ok);
+  border: 1px solid rgba(252, 208, 92, 0.25);
+}
+
+#audio-guide-status.status-error {
+  display: block;
+  background: rgba(252, 92, 92, 0.1);
+  color: var(--miss);
+  border: 1px solid rgba(252, 92, 92, 0.25);
+}
+
+#audio-guide-close {
+  margin-top: 4px;
+}
+
 

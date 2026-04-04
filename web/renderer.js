@@ -85,6 +85,12 @@ const missCountEl = $('#miss-count');
 const lanesContainer = $('#lanes-container');
 const laneLabels = $('#lane-labels');
 
+// Audio guide
+const audioGuideEl = $('#audio-guide');
+const audioGuideStatusEl = $('#audio-guide-status');
+const audioGuideCloseBtn = $('#audio-guide-close');
+const audioHelpBtn = $('#audio-help-btn');
+
 const dancerFiguresEl = $('#dancer-figures');
 const hireDancerBtn = $('#hire-dancer-btn');
 const hireDancerCostEl = $('#dancer-hire-cost');
@@ -196,16 +202,65 @@ function rebuildLanes() {
   }
 }
 
+// --- Audio Setup Guide ---
+function showAudioGuide() {
+  audioGuideEl.style.display = '';
+  setGuideStep(1);
+  setGuideStatus('', '');
+}
+
+function hideAudioGuide() {
+  audioGuideEl.style.display = 'none';
+}
+
+function setGuideStep(activeStep) {
+  const steps = audioGuideEl.querySelectorAll('.guide-step');
+  steps.forEach((el) => {
+    const s = parseInt(el.dataset.step);
+    el.classList.remove('active', 'done');
+    if (s < activeStep) el.classList.add('done');
+    else if (s === activeStep) el.classList.add('active');
+  });
+}
+
+function setGuideStatus(msg, level) {
+  audioGuideStatusEl.className = '';
+  if (!msg) {
+    audioGuideStatusEl.style.display = 'none';
+    return;
+  }
+  audioGuideStatusEl.textContent = msg;
+  audioGuideStatusEl.className = `status-${level}`;
+  audioGuideStatusEl.style.display = 'block';
+}
+
+function hasSeenAudioGuide() {
+  return localStorage.getItem('clicktrack_audio_guide_done') === '1';
+}
+
+function markAudioGuideDone() {
+  localStorage.setItem('clicktrack_audio_guide_done', '1');
+}
+
 // --- Audio Capture (system audio via getDisplayMedia, mic fallback) ---
 async function startCapture() {
   if (isListening) stopListening();
+
+  // Show guide on first use, or if already visible keep it open
+  const guideVisible = audioGuideEl.style.display !== 'none';
+  if (!hasSeenAudioGuide() || guideVisible) {
+    showAudioGuide();
+    setGuideStep(3); // step 1-2 done (music playing + clicked button)
+  }
 
   listenBtn.style.display = 'none';
   beatCounterEl.textContent = 'Pick a tab playing music and check "Share audio"';
 
   let stream = null;
+  let usedDisplayMedia = false;
 
   try {
+    if (guideVisible || !hasSeenAudioGuide()) setGuideStep(3);
     stream = await navigator.mediaDevices.getDisplayMedia({
       video: true,
       audio: true,
@@ -215,11 +270,21 @@ async function startCapture() {
     stream.getVideoTracks().forEach((t) => t.stop());
 
     if (stream.getAudioTracks().length === 0) {
+      // User shared a tab but did NOT check "Share audio"
       stream = null;
+      if (audioGuideEl.style.display !== 'none') {
+        setGuideStep(4);
+        setGuideStatus('No audio track detected. Did you check "Share audio" in the picker?', 'warn');
+      }
+    } else {
+      usedDisplayMedia = true;
     }
   } catch (e) {
     console.warn('getDisplayMedia failed, trying mic fallback:', e.message);
     stream = null;
+    if (audioGuideEl.style.display !== 'none') {
+      setGuideStatus('Tab sharing cancelled or unavailable. Trying microphone...', 'warn');
+    }
   }
 
   // Fallback: microphone input (captures system audio via stereo mix / loopback)
@@ -229,15 +294,21 @@ async function startCapture() {
       stream = await navigator.mediaDevices.getUserMedia({ audio: true });
     } catch (e2) {
       console.error('All audio capture failed:', e2);
-      beatCounterEl.textContent = 'Audio capture failed — using metronome';
+      beatCounterEl.textContent = 'Audio capture failed - using metronome';
       listenBtn.style.display = '';
+      if (audioGuideEl.style.display !== 'none') {
+        setGuideStatus('Could not access any audio source. Check browser permissions, or just use the metronome.', 'error');
+      }
       return;
     }
   }
 
   if (!stream || stream.getAudioTracks().length === 0) {
-    beatCounterEl.textContent = 'No audio — using metronome';
+    beatCounterEl.textContent = 'No audio - using metronome';
     listenBtn.style.display = '';
+    if (audioGuideEl.style.display !== 'none') {
+      setGuideStatus('No audio track found. Make sure "Share audio" is checked when picking a tab.', 'warn');
+    }
     return;
   }
 
@@ -264,11 +335,29 @@ async function startCapture() {
     stopBtn.style.display = '';
     beatCounterEl.textContent = 'Listening...';
 
+    // Guide success
+    if (audioGuideEl.style.display !== 'none') {
+      setGuideStep(6); // all done
+      if (usedDisplayMedia) {
+        setGuideStatus('Audio connected! Notes will now sync to the beat of your music.', 'ok');
+      } else {
+        setGuideStatus('Connected via microphone. For best results, try tab sharing next time.', 'ok');
+      }
+      markAudioGuideDone();
+      // Auto-close guide after 3 seconds on success
+      setTimeout(() => {
+        if (isListening) hideAudioGuide();
+      }, 3000);
+    }
+
     if (!animFrameId) gameLoop();
   } catch (e) {
     console.error('Audio setup failed:', e);
-    beatCounterEl.textContent = 'Audio error — using metronome';
+    beatCounterEl.textContent = 'Audio error - using metronome';
     listenBtn.style.display = '';
+    if (audioGuideEl.style.display !== 'none') {
+      setGuideStatus('Audio setup failed: ' + e.message, 'error');
+    }
   }
 }
 
@@ -843,6 +932,14 @@ function showFeedback(type, earned) {
 // --- Events ---
 listenBtn.addEventListener('click', startCapture);
 stopBtn.addEventListener('click', stopListening);
+audioHelpBtn.addEventListener('click', () => {
+  if (audioGuideEl.style.display === 'none') showAudioGuide();
+  else hideAudioGuide();
+});
+audioGuideCloseBtn.addEventListener('click', () => {
+  hideAudioGuide();
+  markAudioGuideDone();
+});
 
 document.addEventListener('keydown', (e) => {
   if (e.repeat) return;
@@ -1171,7 +1268,7 @@ const TUTORIAL_STEPS = [
   {
     target: '#listen-btn',
     title: 'Sync Audio',
-    text: 'Click Sync Audio to play along with your own music. Notes will match the beat! Otherwise, a metronome keeps the rhythm.',
+    text: 'Click Sync Audio to play along with your own music. Notes will match the beat! Click the ? button anytime for setup help.',
   },
 ];
 
