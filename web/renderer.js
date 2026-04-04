@@ -45,6 +45,16 @@ let comboStreak = 0;
 let accuracyCounts = { perfect: 0, good: 0, ok: 0, miss: 0 };
 let PASSIVE_PER_BEAT = 0.1;
 
+// --- Chord detection (two cardinals → diagonal) ---
+const CHORD_MAP = {
+  'a+w': 'q', 'w+a': 'q',  // left + up    = up-left
+  'd+w': 'e', 'w+d': 'e',  // right + up   = up-right
+  'a+s': 'z', 's+a': 'z',  // left + down  = down-left
+  'd+s': 'c', 's+d': 'c',  // right + down = down-right
+};
+const CHORD_WINDOW_MS = 100;
+const heldKeys = new Map(); // key → press timestamp
+
 // --- Dancers ---
 let dancerCooldowns = [];
 
@@ -855,8 +865,44 @@ document.addEventListener('keydown', (e) => {
 
   if (ALL_KEYS.includes(key)) {
     e.preventDefault();
+    const now = performance.now();
+    heldKeys.set(key, now);
+
+    // Check if this key + another held cardinal key forms a diagonal chord
+    const cardinals = ['w', 'a', 's', 'd'];
+    if (cardinals.includes(key)) {
+      for (const [held, pressTime] of heldKeys) {
+        if (held === key || !cardinals.includes(held)) continue;
+        if (now - pressTime > CHORD_WINDOW_MS) continue;
+        const chordKey = CHORD_MAP[held + '+' + key];
+        if (chordKey && state.keys[chordKey]?.unlocked) {
+          // Check if there's a note for the diagonal key on screen
+          const hasNote = activeNotes.some(n => !n.hit && n.key === chordKey);
+          if (hasNote) {
+            onKeyPress(chordKey);
+            return;
+          }
+        }
+      }
+    }
+
     onKeyPress(key);
   }
+});
+
+document.addEventListener('keyup', (e) => {
+  const KEY_MAP = {
+    'ArrowLeft':  'a', 'ArrowUp':  'w', 'ArrowDown': 's', 'ArrowRight': 'd',
+    'Numpad7': 'q', 'Numpad8': 'w', 'Numpad9': 'e',
+    'Numpad4': 'a', 'Numpad5': 's', 'Numpad6': 'd',
+    'Numpad1': 'z', 'Numpad2': 'x', 'Numpad3': 'c',
+    '7': 'q', '8': 'w', '9': 'e',
+    '4': 'a', '5': 's', '6': 'd',
+    '1': 'z', '2': 'x', '3': 'c',
+  };
+
+  const key = KEY_MAP[e.code] || KEY_MAP[e.key] || e.key.toLowerCase();
+  heldKeys.delete(key);
 });
 
 unlockTierBtn.addEventListener('click', () => {
