@@ -1095,6 +1095,31 @@ body {
   margin-top: 4px;
 }
 
+/* Combo breakdown */
+#combo-breakdown {
+  font-size: 0.7rem;
+  margin-top: 2px;
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  align-items: center;
+}
+
+.combo-player {
+  color: var(--hit);
+  font-weight: 600;
+}
+
+.combo-dancer {
+  color: var(--ok);
+  font-weight: 600;
+}
+
+.combo-pct {
+  color: var(--text-dim);
+  font-size: 0.65rem;
+}
+
 /* Lane label text (arrow/numpad mode) */
 .lane-label-text {
   font-size: 1.4rem;

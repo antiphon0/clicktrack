@@ -42,6 +42,8 @@ let noteIdCounter = 0;
 
 // Combo & accuracy
 let comboStreak = 0;
+let playerStreak = 0;
+let dancerStreak = 0;
 let accuracyCounts = { perfect: 0, good: 0, ok: 0, miss: 0 };
 let PASSIVE_PER_BEAT = 0.1;
 
@@ -646,6 +648,7 @@ function onKeyPress(key) {
   }, 150);
 
   comboStreak++;
+  playerStreak++;
   const result = processTap(state, key, accuracy);
   // Apply BPM earnings multiplier
   if (bpmEarningsMult !== 1) {
@@ -721,6 +724,7 @@ function autoDancerHit(note) {
     if (note.element.parentNode) note.element.parentNode.removeChild(note.element);
   }, 150);
   comboStreak++;
+  dancerStreak++;
   const result = processTap(state, note.key, accuracy);
   // Apply BPM multiplier first
   let earned = result.earned * bpmEarningsMult;
@@ -749,6 +753,8 @@ function onNoteMiss(note) {
   }, 200);
 
   comboStreak = 0;
+  playerStreak = 0;
+  dancerStreak = 0;
   if (state.keys[note.key]?.unlocked) {
     processMiss(state, note.key);
   }
@@ -788,6 +794,19 @@ function updateCurrency() {
 function updateCombo() {
   comboCountEl.textContent = comboStreak;
   comboMultEl.textContent = '\u00d7' + getComboMultiplier(comboStreak, state);
+
+  const breakdownEl = document.getElementById('combo-breakdown');
+  if (breakdownEl) {
+    if (comboStreak > 0 && (playerStreak > 0 || dancerStreak > 0)) {
+      const pct = comboStreak > 0 ? Math.round((playerStreak / comboStreak) * 100) : 0;
+      breakdownEl.style.display = '';
+      breakdownEl.innerHTML = `<span class="combo-player">${playerStreak} you</span>` +
+        (dancerStreak > 0 ? ` <span class="combo-dancer">${dancerStreak} dancer${dancerStreak !== 1 ? 's' : ''}</span>` : '') +
+        (comboStreak >= 10 ? ` <span class="combo-pct">${pct}%</span>` : '');
+    } else {
+      breakdownEl.style.display = 'none';
+    }
+  }
 }
 
 // Lightweight refresh: update cost/label/affordability on existing upgrade rows without full rebuild
@@ -1113,6 +1132,8 @@ prestigeBtn.addEventListener('click', () => {
   if (result.success) {
     state = result.state;
     comboStreak = 0;
+    playerStreak = 0;
+    dancerStreak = 0;
     accuracyCounts = { perfect: 0, good: 0, ok: 0, miss: 0 };
     syncDancerCooldowns();
     rebuildLanes();
