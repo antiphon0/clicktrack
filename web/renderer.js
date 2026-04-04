@@ -52,8 +52,8 @@ const CHORD_MAP = {
   'a+s': 'z', 's+a': 'z',  // left + down  = down-left
   'd+s': 'c', 's+d': 'c',  // right + down = down-right
 };
-const CHORD_WINDOW_MS = 100;
-const heldKeys = new Map(); // key → press timestamp
+const CHORD_WINDOW_MS = 80;
+let pendingCardinal = null; // { key, timestamp, timerId }
 
 // --- Dancers ---
 let dancerCooldowns = [];
@@ -865,44 +865,56 @@ document.addEventListener('keydown', (e) => {
 
   if (ALL_KEYS.includes(key)) {
     e.preventDefault();
-    const now = performance.now();
-    heldKeys.set(key, now);
 
-    // Check if this key + another held cardinal key forms a diagonal chord
     const cardinals = ['w', 'a', 's', 'd'];
-    if (cardinals.includes(key)) {
-      for (const [held, pressTime] of heldKeys) {
-        if (held === key || !cardinals.includes(held)) continue;
-        if (now - pressTime > CHORD_WINDOW_MS) continue;
-        const chordKey = CHORD_MAP[held + '+' + key];
-        if (chordKey && state.keys[chordKey]?.unlocked) {
-          // Check if there's a note for the diagonal key on screen
-          const hasNote = activeNotes.some(n => !n.hit && n.key === chordKey);
-          if (hasNote) {
-            onKeyPress(chordKey);
-            return;
-          }
-        }
+    const isCardinal = cardinals.includes(key);
+
+    // If a cardinal is pending and this cardinal completes a chord, fire the diagonal
+    if (isCardinal && pendingCardinal && pendingCardinal.key !== key) {
+      const chordKey = CHORD_MAP[pendingCardinal.key + '+' + key];
+      if (chordKey && state.keys[chordKey]?.unlocked) {
+        clearTimeout(pendingCardinal.timerId);
+        pendingCardinal = null;
+        onKeyPress(chordKey);
+        return;
       }
     }
 
+    // If this is a cardinal and diagonals are unlocked, buffer it briefly
+    if (isCardinal) {
+      // Check if any diagonal using this key is unlocked
+      const hasDiagonal = cardinals.some(other => {
+        if (other === key) return false;
+        const dk = CHORD_MAP[key + '+' + other];
+        return dk && state.keys[dk]?.unlocked;
+      });
+
+      if (hasDiagonal) {
+        // Flush any existing pending cardinal first
+        if (pendingCardinal) {
+          clearTimeout(pendingCardinal.timerId);
+          onKeyPress(pendingCardinal.key);
+          pendingCardinal = null;
+        }
+        // Buffer this cardinal
+        const timerId = setTimeout(() => {
+          if (pendingCardinal && pendingCardinal.key === key) {
+            pendingCardinal = null;
+            onKeyPress(key);
+          }
+        }, CHORD_WINDOW_MS);
+        pendingCardinal = { key, timestamp: performance.now(), timerId };
+        return;
+      }
+    }
+
+    // Non-cardinal or no diagonals unlocked - fire immediately
     onKeyPress(key);
   }
 });
 
 document.addEventListener('keyup', (e) => {
-  const KEY_MAP = {
-    'ArrowLeft':  'a', 'ArrowUp':  'w', 'ArrowDown': 's', 'ArrowRight': 'd',
-    'Numpad7': 'q', 'Numpad8': 'w', 'Numpad9': 'e',
-    'Numpad4': 'a', 'Numpad5': 's', 'Numpad6': 'd',
-    'Numpad1': 'z', 'Numpad2': 'x', 'Numpad3': 'c',
-    '7': 'q', '8': 'w', '9': 'e',
-    '4': 'a', '5': 's', '6': 'd',
-    '1': 'z', '2': 'x', '3': 'c',
-  };
-
-  const key = KEY_MAP[e.code] || KEY_MAP[e.key] || e.key.toLowerCase();
-  heldKeys.delete(key);
+  // no-op, chord detection uses buffering not held-key tracking
 });
 
 unlockTierBtn.addEventListener('click', () => {
