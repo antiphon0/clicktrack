@@ -130,14 +130,12 @@ function getUnlockedKeys() {
 }
 
 // Lane order matches physical keyboard position left-to-right (QWERTY x-offsets)
-const LANE_ORDER = ['q', 'a', 'z', 'w', 's', 'x', 'e', 'd', 'c'];
-const KEY_ANGLE = { w: 0, d: 90, s: 180, a: 270, e: 45, c: 135, x: 180, z: 225, q: 315 };
-const KEY_COLOR = { a: '#ff4455', w: '#44dd77', s: '#4499ff', d: '#ffdd33', q: '#cc44ff', e: '#ff8833', z: '#ff44cc', x: '#aaddff', c: '#44ffcc' };
-const KEY_GLOW  = { a: 'rgba(255,68,85,0.9)', w: 'rgba(68,221,119,0.9)', s: 'rgba(68,153,255,0.9)', d: 'rgba(255,221,51,0.9)', q: 'rgba(204,68,255,0.9)', e: 'rgba(255,136,51,0.9)', z: 'rgba(255,68,204,0.9)', x: 'rgba(170,221,255,0.9)', c: 'rgba(68,255,204,0.9)' };
+const LANE_ORDER = ['q', 'a', 'z', 'w', 's', 'e', 'd', 'c'];
+const KEY_ANGLE = { w: 0, d: 90, s: 180, a: 270, e: 45, c: 135, z: 225, q: 315 };
+const KEY_COLOR = { a: '#ff4455', w: '#44dd77', s: '#4499ff', d: '#ffdd33', q: '#cc44ff', e: '#ff8833', z: '#ff44cc', c: '#44ffcc' };
+const KEY_GLOW  = { a: 'rgba(255,68,85,0.9)', w: 'rgba(68,221,119,0.9)', s: 'rgba(68,153,255,0.9)', d: 'rgba(255,221,51,0.9)', q: 'rgba(204,68,255,0.9)', e: 'rgba(255,136,51,0.9)', z: 'rgba(255,68,204,0.9)', c: 'rgba(68,255,204,0.9)' };
 // DDR-style arrow: wide head, narrow stem, clean proportions
 const ARROW_SHAPE = 'M 50,4 L 92,46 L 66,46 L 66,96 L 34,96 L 34,46 L 8,46 Z';
-// X-cross shape for the X key (no compass direction left)
-const X_SHAPE = 'M 50,34 L 66,18 L 82,34 L 66,50 L 82,66 L 66,82 L 50,66 L 34,82 L 18,66 L 34,50 L 18,34 L 34,18 Z';
 
 function createArrowEl(key, isTarget) {
   const angle = KEY_ANGLE[key] ?? 0;
@@ -147,15 +145,13 @@ function createArrowEl(key, isTarget) {
   svg.setAttribute('viewBox', '0 0 100 100');
 
   const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-  const shape = key === 'x' ? X_SHAPE : ARROW_SHAPE;
-  // Only rotate arrows, not the X shape
-  if (key !== 'x' && angle !== 0) g.setAttribute('transform', `rotate(${angle}, 50, 50)`);
+  if (angle !== 0) g.setAttribute('transform', `rotate(${angle}, 50, 50)`);
 
   if (isTarget) {
     // Hollow ghost arrow at the hit zone
     svg.style.opacity = '0.35';
     const outline = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    outline.setAttribute('d', shape);
+    outline.setAttribute('d', ARROW_SHAPE);
     outline.setAttribute('fill', 'none');
     outline.setAttribute('stroke', color);
     outline.setAttribute('stroke-width', '2.5');
@@ -165,7 +161,7 @@ function createArrowEl(key, isTarget) {
     // Solid filled arrow for scrolling notes
     svg.style.filter = `drop-shadow(0 0 6px ${glow})`;
     const fill = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    fill.setAttribute('d', shape);
+    fill.setAttribute('d', ARROW_SHAPE);
     fill.setAttribute('fill', color);
     fill.setAttribute('stroke', '#111122');
     fill.setAttribute('stroke-width', '3');
@@ -333,7 +329,7 @@ function detectOnset() {
 }
 
 // --- Note Spawning ---
-const KEY_SPAWN_WEIGHT = { w: 4, a: 4, s: 4, d: 4, q: 1, e: 1, z: 1, x: 1, c: 1 };
+const KEY_SPAWN_WEIGHT = { w: 4, a: 4, s: 4, d: 4, q: 1, e: 1, z: 1, c: 1 };
 
 function weightedKey(keys) {
   const weights = keys.map((k) => KEY_SPAWN_WEIGHT[k] ?? 1);

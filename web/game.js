@@ -6,7 +6,6 @@ const KEY_TIERS = [
   { tier: 2, keys: ['s'], unlockCost: 50 },
   { tier: 3, keys: ['a', 'd'], unlockCost: 250 },
   { tier: 4, keys: ['q', 'e', 'z', 'c'], unlockCost: 2500 },
-  { tier: 5, keys: ['x'], unlockCost: 25000 },
 ];
 
 const ALL_KEYS = KEY_TIERS.flatMap((t) => t.keys);
@@ -110,7 +109,7 @@ function getKeyUpgradeCost(level) {
 }
 
 // Rare (non-WASD) keys are worth 3× more per hit (5× with Virtuoso)
-const KEY_VALUE_BONUS = { q: 3, e: 3, z: 3, x: 3, c: 3 };
+const KEY_VALUE_BONUS = { q: 3, e: 3, z: 3, c: 3 };
 
 function getKeyValue(state, key) {
   const keyState = state.keys[key];
