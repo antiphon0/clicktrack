@@ -795,17 +795,17 @@ function updateCombo() {
   comboCountEl.textContent = comboStreak;
   comboMultEl.textContent = '\u00d7' + getComboMultiplier(comboStreak, state);
 
-  const breakdownEl = document.getElementById('combo-breakdown');
-  if (breakdownEl) {
-    if (comboStreak > 0 && (playerStreak > 0 || dancerStreak > 0)) {
-      const pct = comboStreak > 0 ? Math.round((playerStreak / comboStreak) * 100) : 0;
-      breakdownEl.style.display = '';
-      breakdownEl.innerHTML = `<span class="combo-player">${playerStreak} you</span>` +
-        (dancerStreak > 0 ? ` <span class="combo-dancer">${dancerStreak} dancer${dancerStreak !== 1 ? 's' : ''}</span>` : '') +
-        (comboStreak >= 10 ? ` <span class="combo-pct">${pct}%</span>` : '');
-    } else {
-      breakdownEl.style.display = 'none';
-    }
+  const skillEl = document.getElementById('skill-count');
+  const autoEl = document.getElementById('auto-count');
+  const skillTrack = document.getElementById('combo-skill');
+  const autoTrack = document.getElementById('combo-auto');
+  if (skillEl) skillEl.textContent = playerStreak;
+  if (autoEl) autoEl.textContent = dancerStreak;
+
+  // Highlight whichever is leading
+  if (skillTrack && autoTrack) {
+    skillTrack.classList.toggle('combo-leading', playerStreak > 0 && playerStreak >= dancerStreak);
+    autoTrack.classList.toggle('combo-leading', dancerStreak > 0 && dancerStreak > playerStreak);
   }
 }
 

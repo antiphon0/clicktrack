@@ -1096,28 +1096,56 @@ body {
 }
 
 /* Combo breakdown */
-#combo-breakdown {
-  font-size: 0.7rem;
-  margin-top: 2px;
+#combo-total {
+  line-height: 1;
+}
+
+#combo-split {
   display: flex;
-  gap: 8px;
+  gap: 16px;
   justify-content: center;
+  margin-top: 4px;
+}
+
+.combo-track {
+  display: flex;
   align-items: center;
+  gap: 5px;
 }
 
-.combo-player {
+.combo-track-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  opacity: 0.5;
+}
+
+#combo-skill .combo-track-label {
   color: var(--hit);
-  font-weight: 600;
 }
 
-.combo-dancer {
+#combo-skill .combo-track-count {
+  color: var(--hit);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+#combo-auto .combo-track-label {
   color: var(--ok);
-  font-weight: 600;
 }
 
-.combo-pct {
-  color: var(--text-dim);
-  font-size: 0.65rem;
+#combo-auto .combo-track-count {
+  color: var(--ok);
+  font-weight: 700;
+  font-size: 0.95rem;
+}
+
+#combo-skill.combo-leading .combo-track-count {
+  text-shadow: 0 0 8px rgba(92, 252, 124, 0.5);
+}
+
+#combo-auto.combo-leading .combo-track-count {
+  text-shadow: 0 0 8px rgba(252, 208, 92, 0.5);
 }
 
 /* Lane label text (arrow/numpad mode) */

@@ -88,9 +88,20 @@
       <!-- Feedback -->
       <div id="feedback">
         <div id="combo-display">
-          <span id="combo-count">0</span>x combo
-          <span id="combo-mult">&times;1</span>
-          <div id="combo-breakdown" style="display:none;"></div>
+          <div id="combo-total">
+            <span id="combo-count">0</span>x combo
+            <span id="combo-mult">&times;1</span>
+          </div>
+          <div id="combo-split">
+            <div id="combo-skill" class="combo-track">
+              <span class="combo-track-label">SKILL</span>
+              <span class="combo-track-count" id="skill-count">0</span>
+            </div>
+            <div id="combo-auto" class="combo-track">
+              <span class="combo-track-label">AUTO</span>
+              <span class="combo-track-count" id="auto-count">0</span>
+            </div>
+          </div>
         </div>
         <div id="tap-feedback"></div>
         <div id="accuracy-display">
