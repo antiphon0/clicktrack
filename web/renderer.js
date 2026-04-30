@@ -1568,6 +1568,26 @@ function init() {
 
   startDefaultLoop();
 
+  // Passive glow hint on Sync Audio button: 5 pulses, one every 10 seconds
+  (function scheduleSyncHint() {
+    const btn = document.getElementById('listen-btn');
+    if (!btn || isListening) return;
+    let count = 0;
+    const MAX = 5;
+    const INTERVAL = 10000;
+    function pulse() {
+      if (isListening || count >= MAX) return;
+      btn.classList.remove('sync-hint-pulse');
+      // Force reflow so re-adding the class restarts the animation
+      void btn.offsetWidth;
+      btn.classList.add('sync-hint-pulse');
+      btn.addEventListener('animationend', () => btn.classList.remove('sync-hint-pulse'), { once: true });
+      count++;
+      if (count < MAX) setTimeout(pulse, INTERVAL);
+    }
+    setTimeout(pulse, INTERVAL);
+  })();
+
   // Show tutorial for new users
   if (shouldShowTutorial()) {
     setTimeout(showTutorial, 600);
