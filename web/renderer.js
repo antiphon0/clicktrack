@@ -486,7 +486,7 @@ function detectOnset() {
 
   energyHistory.push(rms);
   if (energyHistory.length > ENERGY_HISTORY_SIZE) energyHistory.shift();
-  if (energyHistory.length < 5) return false;
+  if (energyHistory.length < 5) return 0;
 
   const avg = energyHistory.reduce((a, b) => a + b, 0) / energyHistory.length;
   const now = performance.now();
@@ -586,8 +586,8 @@ function gameLoop() {
 
     const pastHitMs = now - note.hitTime;
 
-    // Dancers only step in AFTER the player's hit window passes (fallback, not autopilot)
-    if (pastHitMs > HIT_GOOD_MS && state.dancers && state.dancers.count > 0) {
+    // Dancers only step in AFTER the player's full hit window passes (fallback, not autopilot)
+    if (pastHitMs > HIT_OK_MS && state.dancers && state.dancers.count > 0) {
       const di = dancerCooldowns.findIndex((cd) => cd <= now);
       if (di !== -1) {
         dancerCooldowns[di] = now + 400;

@@ -155,7 +155,8 @@ function processTap(state, key, accuracy = 'perfect', opts = {}) {
   if (!keyState || !keyState.unlocked) return { state, earned: 0 };
 
   const source = opts.source || 'player';
-  keyState.combo++;
+  // Only player hits drive the per-key combo counter (bursts & bestCombo are player-only rewards)
+  if (source === 'player') keyState.combo++;
   state.stats.totalTaps++;
 
   const baseValue = getKeyValue(state, key);
@@ -177,11 +178,13 @@ function processTap(state, key, accuracy = 'perfect', opts = {}) {
     earned += burst;
   }
 
-  if (keyState.combo > keyState.bestCombo) {
-    keyState.bestCombo = keyState.combo;
-  }
-  if (keyState.combo > state.stats.bestCombo) {
-    state.stats.bestCombo = keyState.combo;
+  if (source === 'player') {
+    if (keyState.combo > keyState.bestCombo) {
+      keyState.bestCombo = keyState.combo;
+    }
+    if (keyState.combo > state.stats.bestCombo) {
+      state.stats.bestCombo = keyState.combo;
+    }
   }
 
   state.currency += earned;

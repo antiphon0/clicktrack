@@ -1211,16 +1211,6 @@ body {
   opacity: 0.5;
 }
 
-#combo-skill .combo-track-label {
-  color: var(--hit);
-}
-
-#combo-skill .combo-track-count {
-  color: var(--hit);
-  font-weight: 700;
-  font-size: 0.95rem;
-}
-
 #combo-auto .combo-track-label {
   color: var(--ok);
 }
@@ -1229,10 +1219,6 @@ body {
   color: var(--ok);
   font-weight: 700;
   font-size: 0.95rem;
-}
-
-#combo-skill.combo-leading .combo-track-count {
-  text-shadow: 0 0 8px rgba(92, 252, 124, 0.5);
 }
 
 #combo-auto.combo-leading .combo-track-count {
