@@ -268,7 +268,30 @@ body {
   right: 0;
   bottom: 56px; /* leave room for hit zone + labels */
   display: flex;
+  margin: 0 auto;
+  transition: max-width 0.3s ease;
 }
+
+#lane-labels {
+  display: flex;
+  position: absolute;
+  top: 6px;
+  left: 0;
+  right: 0;
+  height: 46px;
+  margin: 0 auto;
+  transition: max-width 0.3s ease;
+}
+
+/* Phase-based width: keep lanes closer together until all 8 are unlocked */
+#lanes-container[data-count="1"], #lane-labels[data-count="1"] { max-width: 14%; left: 0; right: 0; }
+#lanes-container[data-count="2"], #lane-labels[data-count="2"] { max-width: 22%; left: 0; right: 0; }
+#lanes-container[data-count="3"], #lane-labels[data-count="3"] { max-width: 29%; left: 0; right: 0; }
+#lanes-container[data-count="4"], #lane-labels[data-count="4"] { max-width: 35%; left: 0; right: 0; }
+#lanes-container[data-count="5"], #lane-labels[data-count="5"] { max-width: 43%; left: 0; right: 0; }
+#lanes-container[data-count="6"], #lane-labels[data-count="6"] { max-width: 51%; left: 0; right: 0; }
+#lanes-container[data-count="7"], #lane-labels[data-count="7"] { max-width: 62%; left: 0; right: 0; }
+/* count=8: full width (default) */
 
 .lane {
   flex: 1;
@@ -320,15 +343,6 @@ body {
   box-shadow: 0 0 12px var(--accent-glow), 0 0 24px var(--accent-glow);
 }
 
-#lane-labels {
-  display: flex;
-  position: absolute;
-  top: 6px;
-  left: 0;
-  right: 0;
-  height: 46px;
-}
-
 .lane-label {
   flex: 1;
   display: flex;
@@ -363,6 +377,12 @@ body {
   transition: opacity 0.1s;
   pointer-events: none;
   z-index: 2;
+}
+
+/* Chord notes: paired with another simultaneous note. Bigger glow, slightly larger. */
+.note.chord-note {
+  filter: drop-shadow(0 0 10px var(--key-glow, rgba(255,255,255,0.8)));
+  transform: translateX(-50%) scale(1.15);
 }
 
 /* Per-key color variables (used for label-hit flash) */
@@ -778,6 +798,54 @@ body {
   border-color: var(--accent);
 }
 
+.bpm-detected {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 14px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  border: 1px solid rgba(124,92,252,0.5);
+  border-radius: 6px;
+  background: linear-gradient(135deg, rgba(124,92,252,0.18), rgba(124,92,252,0.06));
+  color: #fff;
+  box-shadow: 0 0 12px rgba(124,92,252,0.25);
+}
+
+.bpm-detected-label {
+  font-size: 0.6rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  position: relative;
+  padding-left: 14px;
+}
+
+.bpm-detected-label::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  transform: translateY(-50%);
+  animation: bpm-dot-pulse 1s ease-in-out infinite;
+  box-shadow: 0 0 8px var(--accent);
+}
+
+#detected-bpm-value {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes bpm-dot-pulse {
+  0%, 100% { opacity: 1; transform: translateY(-50%) scale(1); }
+  50% { opacity: 0.5; transform: translateY(-50%) scale(0.7); }
+}
+
 .bpm-btn:disabled {
   opacity: 0.3;
   cursor: not-allowed;
@@ -1110,11 +1178,22 @@ body {
   line-height: 1;
 }
 
+.combo-sublabel {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--hit);
+  opacity: 0.7;
+  margin-top: 3px;
+  text-align: center;
+}
+
 #combo-split {
   display: flex;
   gap: 16px;
   justify-content: center;
-  margin-top: 4px;
+  margin-top: 6px;
 }
 
 .combo-track {

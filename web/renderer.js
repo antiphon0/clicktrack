@@ -13,14 +13,28 @@ let animFrameId = null;
 // Buy mode for bulk upgrades: '1x', '10x', '100x', 'max'
 let buyMode = '1x';
 
+// Audio sync calibration. Positive ms = treat onsets as having occurred this much later
+// (use when audio reaches your ears AFTER it's detected, e.g. Bluetooth/monitor latency).
+// Negative = onsets are treated as earlier. Future settings panel will expose this.
+let audioOffsetMs = 0;
+
 // Onset detection
 const ENERGY_HISTORY_SIZE = 43;
-const ONSET_THRESHOLD = 1.5;
+const ONSET_THRESHOLD = 1.3;
 const ONSET_COOLDOWN_MS = 200;
 const MIN_ENERGY = 0.003;
+// Onsets at or above this magnitude (rms / rolling avg) spawn a 2-note chord
+const CHORD_MAGNITUDE_THRESHOLD = 1.8;
 let energyHistory = [];
 let lastOnsetTime = 0;
 let totalBeatsDetected = 0;
+
+// Rolling buffer of recent onset timestamps for live BPM estimation
+const BPM_HISTORY_SIZE = 16;
+const BPM_MIN = 60;
+const BPM_MAX = 200;
+let onsetTimes = [];
+let detectedBPM = 0;
 
 // Default song (always-on metronome when no audio is detected)
 let currentBPM = 90;
@@ -169,8 +183,9 @@ function getUnlockedKeys() {
   return ALL_KEYS.filter((k) => state.keys[k]?.unlocked);
 }
 
-// Lane order matches physical keyboard position left-to-right (QWERTY x-offsets)
-const LANE_ORDER = ['q', 'z', 'a', 'w', 's', 'd', 'e', 'c'];
+// Lane order matches physical keyboard position left-to-right (QWERTY x-offsets),
+// with W and S swapped so the down arrow sits on the middle-left and up arrow on the middle-right
+const LANE_ORDER = ['q', 'z', 'a', 's', 'w', 'd', 'e', 'c'];
 const KEY_ANGLE = { w: 0, d: 90, s: 180, a: 270, e: 45, c: 135, z: 225, q: 315 };
 const KEY_COLOR = { a: '#ff4455', w: '#44dd77', s: '#4499ff', d: '#ffdd33', q: '#cc44ff', e: '#ff8833', z: '#ff44cc', c: '#44ffcc' };
 const KEY_GLOW  = { a: 'rgba(255,68,85,0.9)', w: 'rgba(68,221,119,0.9)', s: 'rgba(68,153,255,0.9)', d: 'rgba(255,221,51,0.9)', q: 'rgba(204,68,255,0.9)', e: 'rgba(255,136,51,0.9)', z: 'rgba(255,68,204,0.9)', c: 'rgba(68,255,204,0.9)' };
@@ -219,6 +234,8 @@ function rebuildLanes() {
   const sorted = LANE_ORDER.filter((k) => unlocked.includes(k));
   lanesContainer.innerHTML = '';
   laneLabels.innerHTML = '';
+  lanesContainer.dataset.count = sorted.length;
+  laneLabels.dataset.count = sorted.length;
 
   for (const key of sorted) {
     const lane = document.createElement('div');
@@ -384,6 +401,8 @@ async function startCapture() {
     isListening = true;
     energyHistory = [];
     lastOnsetTime = 0;
+    onsetTimes = [];
+    detectedBPM = 0;
 
     // If the shared tab/screen ends, stop gracefully
     stream.getAudioTracks()[0].addEventListener('ended', () => {
@@ -393,6 +412,7 @@ async function startCapture() {
     listenBtn.style.display = 'none';
     stopBtn.style.display = '';
     beatCounterEl.textContent = 'Listening...';
+    buildBPMSelector();
 
     // Guide success
     if (audioGuideEl.style.display !== 'none') {
@@ -445,6 +465,9 @@ function stopListening() {
   stopBtn.style.display = 'none';
   vuFill.style.width = '0%';
   beatCounterEl.textContent = 'Stopped';
+  onsetTimes = [];
+  detectedBPM = 0;
+  buildBPMSelector();
 
   lastDefaultBeatTime = performance.now();
   startDefaultLoop();
@@ -471,9 +494,10 @@ function detectOnset() {
 
   if (rms > avg * ONSET_THRESHOLD && avg > MIN_ENERGY && now - lastOnsetTime > ONSET_COOLDOWN_MS) {
     lastOnsetTime = now;
-    return true;
+    // Return magnitude (rms relative to rolling baseline). Higher = bigger hit.
+    return rms / avg;
   }
-  return false;
+  return 0;
 }
 
 // --- Note Spawning ---
@@ -490,18 +514,21 @@ function weightedKey(keys) {
   return keys[keys.length - 1];
 }
 
-function spawnNote(now) {
-  const unlocked = getUnlockedKeys();
-  if (unlocked.length === 0) return;
+function spawnNote(now, excludeKey = null) {
+  const allUnlocked = getUnlockedKeys();
+  const unlocked = excludeKey ? allUnlocked.filter((k) => k !== excludeKey) : allUnlocked;
+  if (unlocked.length === 0) return null;
 
   const key = weightedKey(unlocked);
-  const hitTime = now + SCROLL_TIME_MS;
+  // Apply audio sync offset to where the note should LAND on the hit line
+  const hitTime = now + SCROLL_TIME_MS + audioOffsetMs;
 
   const lane = lanesContainer.querySelector(`.lane[data-key="${key}"]`);
-  if (!lane) return;
+  if (!lane) return null;
 
   const noteEl = createArrowEl(key);
   noteEl.classList.add('note', `note-key-${key}`);
+  if (excludeKey) noteEl.classList.add('chord-note');
   noteEl.style.top = '0%';
   lane.appendChild(noteEl);
 
@@ -513,6 +540,7 @@ function spawnNote(now) {
     element: noteEl,
     hit: false,
   });
+  return key;
 }
 
 // --- Game Loop ---
@@ -520,11 +548,13 @@ function gameLoop() {
   const now = performance.now();
 
   const beatIntervalMs = (60 / currentBPM) * 1000;
-  const audioOnset = isListening && detectOnset();
-  const defaultBeat = !audioOnset && (now - lastDefaultBeatTime >= beatIntervalMs);
+  const onsetMagnitude = isListening ? detectOnset() : 0;
+  const audioOnset = onsetMagnitude > 0;
+  const defaultBeat = !isListening && (now - lastDefaultBeatTime >= beatIntervalMs);
 
   if (audioOnset || defaultBeat) {
     if (defaultBeat) lastDefaultBeatTime = now;
+    if (audioOnset) updateDetectedBPM(now);
     totalBeatsDetected++;
     beatCounterEl.textContent = totalBeatsDetected + ' beats';
 
@@ -536,15 +566,23 @@ function gameLoop() {
     document.getElementById('app').classList.add('pulse');
     setTimeout(() => document.getElementById('app').classList.remove('pulse'), 150);
 
-    spawnNote(now);
+    const firstKey = spawnNote(now);
+    // Chord on big hits (audio mode only): spawn a second simultaneous note
+    if (audioOnset && onsetMagnitude >= CHORD_MAGNITUDE_THRESHOLD && firstKey) {
+      const secondKey = spawnNote(now, firstKey);
+      if (secondKey) {
+        console.log(`[chord] mag=${onsetMagnitude.toFixed(2)} keys=${firstKey}+${secondKey} unlocked=${getUnlockedKeys().length}`);
+      }
+    }
   }
 
   for (let i = activeNotes.length - 1; i >= 0; i--) {
     const note = activeNotes[i];
     if (note.hit) continue;
 
+    const travelMs = note.hitTime - note.spawnTime;
     const elapsed = now - note.spawnTime;
-    const progress = elapsed / SCROLL_TIME_MS;
+    const progress = elapsed / travelMs;
 
     const topPercent = progress * 100;
     note.element.style.top = topPercent + '%';
@@ -552,10 +590,16 @@ function gameLoop() {
 
     const pastHitMs = now - note.hitTime;
 
-    if (pastHitMs >= 0 && state.dancers && state.dancers.count > 0) {
+    // Dancers only step in AFTER the player's hit window passes (fallback, not autopilot)
+    if (pastHitMs > HIT_GOOD_MS && state.dancers && state.dancers.count > 0) {
       const di = dancerCooldowns.findIndex((cd) => cd <= now);
       if (di !== -1) {
         dancerCooldowns[di] = now + 400;
+        // The player failed to hit in time -> their skill streak breaks
+        if (playerStreak > 0) {
+          playerStreak = 0;
+          updateCombo();
+        }
         autoDancerHit(note);
         activeNotes.splice(i, 1);
         continue;
@@ -649,7 +693,7 @@ function onKeyPress(key) {
 
   comboStreak++;
   playerStreak++;
-  const result = processTap(state, key, accuracy);
+  const result = processTap(state, key, accuracy, { source: 'player', externalCombo: playerStreak });
   // Apply BPM earnings multiplier
   if (bpmEarningsMult !== 1) {
     const bonus = result.earned * (bpmEarningsMult - 1);
@@ -714,7 +758,7 @@ function updateDancerPanel() {
   dancerFiguresEl.innerHTML = html;
 }
 
-const DANCER_EARN_PENALTY = 0.5; // Dancers earn 50% of what manual hits earn
+const DANCER_EARN_PENALTY = 0; // Balance now via combo cap + manual bonus instead of flat penalty
 
 function autoDancerHit(note) {
   note.hit = true;
@@ -725,19 +769,15 @@ function autoDancerHit(note) {
   }, 150);
   comboStreak++;
   dancerStreak++;
-  const result = processTap(state, note.key, accuracy);
-  // Apply BPM multiplier first
+  const result = processTap(state, note.key, accuracy, { source: 'dancer', externalCombo: dancerStreak });
+  // Apply BPM multiplier
   let earned = result.earned * bpmEarningsMult;
   if (bpmEarningsMult !== 1) {
     const bonus = result.earned * (bpmEarningsMult - 1);
     state.currency += bonus;
     state.totalEarned += bonus;
   }
-  // Dancer penalty
-  const penalty = earned * (1 - DANCER_EARN_PENALTY);
-  state.currency -= penalty;
-  state.totalEarned -= penalty;
-  showFeedback(accuracy, earned - penalty);
+  showFeedback(accuracy, earned);
   accuracyCounts[accuracy]++;
   updateCurrency();
   updateCombo();
@@ -752,6 +792,7 @@ function onNoteMiss(note) {
     if (note.element.parentNode) note.element.parentNode.removeChild(note.element);
   }, 200);
 
+  // True miss: no dancer was available to save it. Both streaks reset.
   comboStreak = 0;
   playerStreak = 0;
   dancerStreak = 0;
@@ -792,15 +833,21 @@ function updateCurrency() {
 }
 
 function updateCombo() {
-  comboCountEl.textContent = comboStreak;
-  comboMultEl.textContent = '\u00d7' + getComboMultiplier(comboStreak, state);
+  // Primary combo display = player's earned skill streak
+  comboCountEl.textContent = playerStreak;
+  comboMultEl.textContent = '\u00d7' + getComboMultiplier(playerStreak, state);
 
   const skillEl = document.getElementById('skill-count');
   const autoEl = document.getElementById('auto-count');
   const skillTrack = document.getElementById('combo-skill');
   const autoTrack = document.getElementById('combo-auto');
   if (skillEl) skillEl.textContent = playerStreak;
-  if (autoEl) autoEl.textContent = dancerStreak;
+  if (autoEl) {
+    // Show dancer streak with their (possibly capped) multiplier
+    let dancerMult = getComboMultiplier(dancerStreak, state);
+    if (!hasPrestigeUpgrade(state, 'dance_captain')) dancerMult = Math.min(dancerMult, 3);
+    autoEl.textContent = dancerStreak + ' \u00d7' + dancerMult;
+  }
 
   // Highlight whichever is leading
   if (skillTrack && autoTrack) {
@@ -897,6 +944,7 @@ function updateUpgrades() {
           state = result.state;
           updateCurrency();
           updateUpgrades();
+          saveGame();
         }
       });
     }
@@ -1099,6 +1147,7 @@ unlockTierBtn.addEventListener('click', () => {
     updateCurrency();
     updateUpgrades();
     runAchievementCheck();
+    saveGame();
   }
 });
 
@@ -1111,6 +1160,7 @@ hireDancerBtn.addEventListener('click', () => {
     updateDancerPanel();
     updateUpgrades();
     runAchievementCheck();
+    saveGame();
   }
 });
 
@@ -1121,6 +1171,7 @@ upgradeDancerBtn.addEventListener('click', () => {
     updateCurrency();
     updateDancerPanel();
     updateUpgrades();
+    saveGame();
   }
 });
 
@@ -1255,10 +1306,46 @@ function updateStarShop() {
 }
 
 // --- BPM Selector ---
+function updateDetectedBPM(now) {
+  onsetTimes.push(now);
+  if (onsetTimes.length > BPM_HISTORY_SIZE) onsetTimes.shift();
+  if (onsetTimes.length < 4) return;
+
+  // Build interval list, fold into 60-200 BPM range (handle half/double time)
+  const minMs = 60000 / BPM_MAX; // ~300ms
+  const maxMs = 60000 / BPM_MIN; // 1000ms
+  const folded = [];
+  for (let i = 1; i < onsetTimes.length; i++) {
+    let d = onsetTimes[i] - onsetTimes[i - 1];
+    while (d < minMs) d *= 2;
+    while (d > maxMs) d /= 2;
+    folded.push(d);
+  }
+  if (folded.length === 0) return;
+
+  folded.sort((a, b) => a - b);
+  const median = folded[Math.floor(folded.length / 2)];
+  const bpm = Math.round(60000 / median);
+
+  // Smooth: blend with previous estimate
+  detectedBPM = detectedBPM ? Math.round(detectedBPM * 0.6 + bpm * 0.4) : bpm;
+
+  const el = document.getElementById('detected-bpm-value');
+  if (el) el.textContent = detectedBPM + ' BPM';
+}
+
 function buildBPMSelector() {
   const container = document.getElementById('bpm-selector');
   if (!container) return;
   container.innerHTML = '';
+
+  if (isListening) {
+    const card = document.createElement('div');
+    card.className = 'bpm-detected';
+    card.innerHTML = `<span class="bpm-detected-label">Detected</span><span id="detected-bpm-value">${detectedBPM ? detectedBPM + ' BPM' : '...listening'}</span>`;
+    container.appendChild(card);
+    return;
+  }
 
   for (const opt of BPM_OPTIONS) {
     const locked = opt.requiresUpgrade && !hasPrestigeUpgrade(state, opt.requiresUpgrade);
@@ -1599,6 +1686,11 @@ function init() {
     updateDancerPanel();
     updateStats();
   }, 30000);
+
+  // Save on page hide/refresh so progress isn't lost between auto-save ticks
+  window.addEventListener('beforeunload', () => {
+    saveGame();
+  });
 }
 
 init();

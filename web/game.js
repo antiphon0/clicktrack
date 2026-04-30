@@ -24,7 +24,14 @@ const PRESTIGE_UPGRADES = [
   { id: 'virtuoso',       name: 'Virtuoso',         cost: 25,  desc: 'Rare keys worth 5x instead of 3x' },
   { id: 'big_bang',       name: 'Big Bang',         cost: 50,  desc: '2x prestige star gain' },
   { id: 'tempo_master',   name: 'Tempo Master',     cost: 8,   desc: 'Unlock 240 and 300 BPM speeds' },
+  { id: 'dance_captain',  name: 'Dance Captain',    cost: 12,  desc: 'Dancers gain the full combo multiplier (uncapped)' },
 ];
+
+// Manual play earns 2x compared to dancer auto-hits (skill bonus)
+const MANUAL_BONUS_MULTIPLIER = 2;
+
+// Dancers' combo multiplier is capped to this until Dance Captain is purchased
+const DANCER_COMBO_MULT_CAP = 3;
 
 function hasPrestigeUpgrade(state, id) {
   return state.prestige.purchasedUpgrades.includes(id);
@@ -140,22 +147,32 @@ function getTierUnlockCost(tier) {
 
 const ACCURACY_MULTIPLIERS = { perfect: 1.0, good: 0.75, ok: 0.5 };
 
-// Process a successful tap on a key with accuracy tier
-function processTap(state, key, accuracy = 'perfect') {
+// Process a successful tap on a key with accuracy tier.
+// opts.source: 'player' | 'dancer'  (default 'player')
+// opts.externalCombo: combo count to use for the multiplier (overrides per-key combo)
+function processTap(state, key, accuracy = 'perfect', opts = {}) {
   const keyState = state.keys[key];
   if (!keyState || !keyState.unlocked) return { state, earned: 0 };
 
+  const source = opts.source || 'player';
   keyState.combo++;
   state.stats.totalTaps++;
 
   const baseValue = getKeyValue(state, key);
-  const comboMult = getComboMultiplier(keyState.combo, state);
+  const comboForMult = (opts.externalCombo != null) ? opts.externalCombo : keyState.combo;
+  let comboMult = getComboMultiplier(comboForMult, state);
+  // Cap dancers' combo multiplier unless Dance Captain is owned
+  if (source === 'dancer' && !hasPrestigeUpgrade(state, 'dance_captain')) {
+    comboMult = Math.min(comboMult, DANCER_COMBO_MULT_CAP);
+  }
   const accuracyMult = ACCURACY_MULTIPLIERS[accuracy] || 1;
   let earned = baseValue * comboMult * accuracyMult;
+  // Manual play skill bonus
+  if (source === 'player') earned *= MANUAL_BONUS_MULTIPLIER;
 
-  // Check combo threshold bonuses
-  if (COMBO_THRESHOLDS.includes(keyState.combo)) {
-    let burst = baseValue * keyState.combo * state.offlineSong.comboBonus;
+  // Threshold bursts are a reward for player skill only
+  if (source === 'player' && COMBO_THRESHOLDS.includes(keyState.combo)) {
+    let burst = baseValue * keyState.combo * state.offlineSong.comboBonus * MANUAL_BONUS_MULTIPLIER;
     if (hasPrestigeUpgrade(state, 'encore')) burst *= 2;
     earned += burst;
   }
