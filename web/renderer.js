@@ -55,7 +55,6 @@ let activeNotes = [];
 let noteIdCounter = 0;
 
 // Combo & accuracy
-let comboStreak = 0;
 let playerStreak = 0;
 let dancerStreak = 0;
 let accuracyCounts = { perfect: 0, good: 0, ok: 0, miss: 0 };
@@ -569,10 +568,7 @@ function gameLoop() {
     const firstKey = spawnNote(now);
     // Chord on big hits (audio mode only): spawn a second simultaneous note
     if (audioOnset && onsetMagnitude >= CHORD_MAGNITUDE_THRESHOLD && firstKey) {
-      const secondKey = spawnNote(now, firstKey);
-      if (secondKey) {
-        console.log(`[chord] mag=${onsetMagnitude.toFixed(2)} keys=${firstKey}+${secondKey} unlocked=${getUnlockedKeys().length}`);
-      }
+      spawnNote(now, firstKey);
     }
   }
 
@@ -691,7 +687,6 @@ function onKeyPress(key) {
     if (idx >= 0) activeNotes.splice(idx, 1);
   }, 150);
 
-  comboStreak++;
   playerStreak++;
   const result = processTap(state, key, accuracy, { source: 'player', externalCombo: playerStreak });
   // Apply BPM earnings multiplier
@@ -758,8 +753,6 @@ function updateDancerPanel() {
   dancerFiguresEl.innerHTML = html;
 }
 
-const DANCER_EARN_PENALTY = 0; // Balance now via combo cap + manual bonus instead of flat penalty
-
 function autoDancerHit(note) {
   note.hit = true;
   const accuracy = getDancerAccuracy(state.dancers.level);
@@ -767,7 +760,6 @@ function autoDancerHit(note) {
   setTimeout(() => {
     if (note.element.parentNode) note.element.parentNode.removeChild(note.element);
   }, 150);
-  comboStreak++;
   dancerStreak++;
   const result = processTap(state, note.key, accuracy, { source: 'dancer', externalCombo: dancerStreak });
   // Apply BPM multiplier
@@ -793,7 +785,6 @@ function onNoteMiss(note) {
   }, 200);
 
   // True miss: no dancer was available to save it. Both streaks reset.
-  comboStreak = 0;
   playerStreak = 0;
   dancerStreak = 0;
   if (state.keys[note.key]?.unlocked) {
@@ -837,22 +828,16 @@ function updateCombo() {
   comboCountEl.textContent = playerStreak;
   comboMultEl.textContent = '\u00d7' + getComboMultiplier(playerStreak, state);
 
-  const skillEl = document.getElementById('skill-count');
   const autoEl = document.getElementById('auto-count');
-  const skillTrack = document.getElementById('combo-skill');
   const autoTrack = document.getElementById('combo-auto');
-  if (skillEl) skillEl.textContent = playerStreak;
   if (autoEl) {
     // Show dancer streak with their (possibly capped) multiplier
     let dancerMult = getComboMultiplier(dancerStreak, state);
     if (!hasPrestigeUpgrade(state, 'dance_captain')) dancerMult = Math.min(dancerMult, 3);
     autoEl.textContent = dancerStreak + ' \u00d7' + dancerMult;
   }
-
-  // Highlight whichever is leading
-  if (skillTrack && autoTrack) {
-    skillTrack.classList.toggle('combo-leading', playerStreak > 0 && playerStreak >= dancerStreak);
-    autoTrack.classList.toggle('combo-leading', dancerStreak > 0 && dancerStreak > playerStreak);
+  if (autoTrack) {
+    autoTrack.classList.toggle('combo-leading', dancerStreak > playerStreak);
   }
 }
 
@@ -1182,7 +1167,6 @@ prestigeBtn.addEventListener('click', () => {
   const result = performPrestige(state);
   if (result.success) {
     state = result.state;
-    comboStreak = 0;
     playerStreak = 0;
     dancerStreak = 0;
     accuracyCounts = { perfect: 0, good: 0, ok: 0, miss: 0 };
