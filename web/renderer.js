@@ -1169,9 +1169,21 @@ function saveGame() {
 function loadGame() {
   try {
     const saved = localStorage.getItem(SAVE_KEY);
-    if (saved) state = JSON.parse(saved);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      const defaults = createDefaultState();
+      // Merge top-level fields so new/missing keys always have defaults
+      state = Object.assign(defaults, parsed);
+      // Ensure every expected key has a valid entry
+      for (const key of ALL_KEYS) {
+        if (!state.keys[key] || typeof state.keys[key].unlocked !== 'boolean') {
+          state.keys[key] = defaults.keys[key];
+        }
+      }
+    }
   } catch (e) {
-    console.warn('Load failed:', e);
+    console.warn('Load failed, starting fresh:', e);
+    state = createDefaultState();
   }
 }
 
