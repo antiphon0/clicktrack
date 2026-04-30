@@ -269,6 +269,7 @@ body {
   bottom: 56px; /* leave room for hit zone + labels */
   display: flex;
   margin: 0 auto;
+  max-width: 100%;
   transition: max-width 0.3s ease;
 }
 
@@ -280,6 +281,7 @@ body {
   right: 0;
   height: 46px;
   margin: 0 auto;
+  max-width: 100%;
   transition: max-width 0.3s ease;
 }
 
@@ -291,7 +293,7 @@ body {
 #lanes-container[data-count="5"], #lane-labels[data-count="5"] { max-width: 43%; left: 0; right: 0; }
 #lanes-container[data-count="6"], #lane-labels[data-count="6"] { max-width: 51%; left: 0; right: 0; }
 #lanes-container[data-count="7"], #lane-labels[data-count="7"] { max-width: 62%; left: 0; right: 0; }
-/* count=8: full width (default) */
+#lanes-container[data-count="8"], #lane-labels[data-count="8"] { max-width: 100%; left: 0; right: 0; }
 
 .lane {
   flex: 1;
