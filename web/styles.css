@@ -249,6 +249,18 @@ body {
   box-shadow: none;
 }
 
+.btn-danger {
+  background: transparent;
+  color: var(--miss);
+  border: 1px solid var(--miss);
+}
+
+.btn-danger:hover {
+  background: var(--miss);
+  color: #fff;
+  box-shadow: none;
+}
+
 /* Note Track - fills remaining play-column height */
 #note-track {
   position: relative;

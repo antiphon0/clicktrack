@@ -1213,8 +1213,11 @@ prestigeBtn.addEventListener('click', () => {
 });
 
 // --- Export/Import Buttons ---
-document.getElementById('export-save-btn').addEventListener('click', exportSave);
-document.getElementById('import-save-btn').addEventListener('click', importSave);
+// Guard with ?. so a missing/cached-out button can't throw here and halt the rest
+// of the script (which would stop init() and freeze the whole game).
+document.getElementById('export-save-btn')?.addEventListener('click', exportSave);
+document.getElementById('import-save-btn')?.addEventListener('click', importSave);
+document.getElementById('reset-save-btn')?.addEventListener('click', resetSave);
 
 // --- Save/Load (localStorage) ---
 const SAVE_KEY = 'clicktrack-save';
@@ -1424,6 +1427,51 @@ function importSave() {
   } catch (e) {
     alert('Failed to import save. Make sure you pasted the full string.');
   }
+}
+
+// --- Reset ---
+function resetSave() {
+  const ok = confirm(
+    'Reset your save?\n\nThis permanently wipes all beats, key upgrades, dancers, ' +
+    'prestige stars, and achievements. This cannot be undone.\n\n' +
+    'Tip: use "Export Save" first if you want a backup.'
+  );
+  if (!ok) return;
+
+  try {
+    localStorage.removeItem(SAVE_KEY);
+  } catch (e) {
+    console.warn('Reset failed to clear storage:', e);
+  }
+
+  // Fresh state + clear all renderer-side runtime
+  state = createDefaultState();
+  playerStreak = 0;
+  dancerStreak = 0;
+  accuracyCounts = { perfect: 0, good: 0, ok: 0, miss: 0 };
+  for (const note of activeNotes) {
+    if (note.element && note.element.parentNode) note.element.parentNode.removeChild(note.element);
+  }
+  activeNotes = [];
+  dancerCooldowns = [];
+
+  syncDancerCooldowns();
+  applyPrestigeEffects();
+  rebuildLanes();
+  updateCurrency();
+  updateUpgrades();
+  updateDancerPanel();
+  updatePrestigePanel();
+  updateStarShop();
+  updateAchievementsPanel();
+  updateStats();
+  updateAccuracy();
+  updateCombo();
+  buildBPMSelector();
+  saveGame();
+
+  const el = document.getElementById('tap-feedback');
+  if (el) { el.textContent = 'Save reset — fresh start!'; el.className = 'feedback-perfect'; }
 }
 
 // --- Tutorial ---
