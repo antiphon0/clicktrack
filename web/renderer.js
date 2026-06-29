@@ -671,12 +671,24 @@ function onKeyPress(key) {
     }
   }
 
-  if (!bestNote) return;
+  if (!bestNote) { onWhiff(key); return; }
 
   const offset = now - bestNote.hitTime;
   const accuracy = classifyTiming(offset);
 
-  if (!accuracy) return;
+  if (!accuracy) {
+    // Pressed near a note but outside even the "ok" window. Consume the note as a
+    // miss so it can't later also register as a scroll-past miss (no double penalty).
+    bestNote.hit = true;
+    bestNote.element.classList.add('note-miss');
+    setTimeout(() => {
+      if (bestNote.element.parentNode) bestNote.element.parentNode.removeChild(bestNote.element);
+      const idx = activeNotes.indexOf(bestNote);
+      if (idx >= 0) activeNotes.splice(idx, 1);
+    }, 200);
+    onWhiff(key);
+    return;
+  }
 
   bestNote.hit = true;
 
@@ -794,6 +806,21 @@ function onNoteMiss(note) {
   showFeedback('miss', 0);
   updateCombo();
   updateAccuracy();
+}
+
+// A key press that lands on no note (mashing or a badly mistimed tap) counts as a
+// miss: it breaks the player's skill streak. Dancers run on their own streak, so a
+// player whiff leaves dancerStreak untouched.
+function onWhiff(key) {
+  playerStreak = 0;
+  if (state.keys[key]?.unlocked) {
+    processMiss(state, key);
+  }
+  accuracyCounts.miss++;
+  showFeedback('miss', 0);
+  updateCombo();
+  updateAccuracy();
+  updateStats();
 }
 
 // --- UI ---
