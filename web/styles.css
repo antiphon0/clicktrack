@@ -317,6 +317,16 @@ body {
   border-right: none;
 }
 
+/* Auto-hit lanes (diagonals): the game plays these, so they read as background/ambient.
+   Dimmed and faintly tinted to signal "not yours to hit." */
+.lane.auto-lane {
+  background: rgba(124, 92, 252, 0.04);
+}
+
+.lane-label.auto-lane {
+  opacity: 0.4;
+}
+
 .lane-flash {
   background: none !important;
 }

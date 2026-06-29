@@ -47,7 +47,7 @@ let gameStartTime = 0;
 
 // Note track
 const SCROLL_TIME_MS = 2500;   // notes take 2.5s to scroll top → hit zone
-let HIT_PERFECT_MS = 80;     // ±80ms = perfect
+let HIT_PERFECT_MS = 88;     // ±88ms = perfect (widened 10% for a more forgiving perfect)
 let HIT_GOOD_MS = 160;       // ±160ms = good
 let HIT_OK_MS = 280;         // ±280ms = ok
 let MISS_THRESHOLD_MS = 380; // past hit zone by this → miss
@@ -60,15 +60,13 @@ let dancerStreak = 0;
 let accuracyCounts = { perfect: 0, good: 0, ok: 0, miss: 0 };
 let PASSIVE_PER_BEAT = 0.1;
 
-// --- Chord detection (two cardinals → diagonal) ---
-const CHORD_MAP = {
-  'a+w': 'q', 'w+a': 'q',  // left + up    = up-left
-  'd+w': 'e', 'w+d': 'e',  // right + up   = up-right
-  'a+s': 'z', 's+a': 'z',  // left + down  = down-left
-  'd+s': 'c', 's+d': 'c',  // right + down = down-right
-};
-const CHORD_WINDOW_MS = 80;
-let pendingCardinal = null; // { key, timestamp, timerId }
+// --- Auto-hit bonus lanes ---
+// The four cardinals (w/a/s/d) are the core skill gameplay — the player hits those.
+// The diagonals (q/e/z/c) are NOT played by the user: they scroll like normal notes but the
+// game resolves them automatically at the hit line for modest "ambient" income. This keeps
+// new players from being overwhelmed by 8 lanes. See DESIGN.md §4.
+const AUTO_KEYS = ['q', 'e', 'z', 'c'];
+const isAutoKey = (key) => AUTO_KEYS.includes(key);
 
 // --- Input method detection ---
 const INPUT_HISTORY_SIZE = 5;
@@ -238,12 +236,12 @@ function rebuildLanes() {
 
   for (const key of sorted) {
     const lane = document.createElement('div');
-    lane.className = 'lane';
+    lane.className = 'lane' + (isAutoKey(key) ? ' auto-lane' : '');
     lane.dataset.key = key;
     lanesContainer.appendChild(lane);
 
     const label = document.createElement('div');
-    label.className = `lane-label lane-label-key-${key}`;
+    label.className = `lane-label lane-label-key-${key}` + (isAutoKey(key) ? ' auto-lane' : '');
     label.dataset.key = key;
     if (detectedInputMethod === 'keyboard') {
       const labelArrow = createArrowEl(key, true);
@@ -586,6 +584,14 @@ function gameLoop() {
 
     const pastHitMs = now - note.hitTime;
 
+    // Auto-hit lanes (diagonals): the game resolves them the moment they reach the hit line.
+    // Never wait for the player or a dancer — these are ambient bonus income.
+    if (isAutoKey(note.key) && pastHitMs >= 0) {
+      autoLaneHit(note);
+      activeNotes.splice(i, 1);
+      continue;
+    }
+
     // Dancers only step in AFTER the player's full hit window passes (fallback, not autopilot)
     if (pastHitMs > HIT_OK_MS && state.dancers && state.dancers.count > 0) {
       const di = dancerCooldowns.findIndex((cd) => cd <= now);
@@ -652,6 +658,7 @@ function flashLane(key) {
 }
 
 function onKeyPress(key) {
+  if (isAutoKey(key)) return; // diagonals are auto-hit, never player-played
   if (!state.keys[key]?.unlocked) return;
 
   flashLane(key);
@@ -786,6 +793,28 @@ function autoDancerHit(note) {
   updateCurrency();
   updateCombo();
   updateAccuracy();
+  updateStats();
+  runAchievementCheck();
+}
+
+// Auto-hit lane (diagonal) resolves itself at the hit line. Flat, modest "ambient" income:
+// routed through the dancer source (no manual 2x, capped combo) at a fixed ×1 combo and "ok"
+// accuracy, so the rare-key value bonus still pays out but skill on the cardinals stays the
+// real earner (DESIGN.md pillar 1). Kept quiet — no big tap feedback, no streak — so it
+// reads as background income, not a hit the player should react to.
+function autoLaneHit(note) {
+  note.hit = true;
+  note.element.classList.add('note-hit');
+  setTimeout(() => {
+    if (note.element.parentNode) note.element.parentNode.removeChild(note.element);
+  }, 150);
+  const result = processTap(state, note.key, 'ok', { source: 'dancer', externalCombo: 1 });
+  if (bpmEarningsMult !== 1) {
+    const bonus = result.earned * (bpmEarningsMult - 1);
+    state.currency += bonus;
+    state.totalEarned += bonus;
+  }
+  updateCurrency();
   updateStats();
   runAchievementCheck();
 }
@@ -1100,49 +1129,9 @@ document.addEventListener('keydown', (e) => {
     if (recentInputCodes.length > INPUT_HISTORY_SIZE) recentInputCodes.shift();
     detectInputMethod();
 
-    const cardinals = ['w', 'a', 's', 'd'];
-    const isCardinal = cardinals.includes(key);
+    // Diagonals are auto-hit by the game, not the player — ignore any press on them.
+    if (isAutoKey(key)) return;
 
-    // If a cardinal is pending and this cardinal completes a chord, fire the diagonal
-    if (isCardinal && pendingCardinal && pendingCardinal.key !== key) {
-      const chordKey = CHORD_MAP[pendingCardinal.key + '+' + key];
-      if (chordKey && state.keys[chordKey]?.unlocked) {
-        clearTimeout(pendingCardinal.timerId);
-        pendingCardinal = null;
-        onKeyPress(chordKey);
-        return;
-      }
-    }
-
-    // If this is a cardinal and diagonals are unlocked, buffer it briefly
-    if (isCardinal) {
-      // Check if any diagonal using this key is unlocked
-      const hasDiagonal = cardinals.some(other => {
-        if (other === key) return false;
-        const dk = CHORD_MAP[key + '+' + other];
-        return dk && state.keys[dk]?.unlocked;
-      });
-
-      if (hasDiagonal) {
-        // Flush any existing pending cardinal first
-        if (pendingCardinal) {
-          clearTimeout(pendingCardinal.timerId);
-          onKeyPress(pendingCardinal.key);
-          pendingCardinal = null;
-        }
-        // Buffer this cardinal
-        const timerId = setTimeout(() => {
-          if (pendingCardinal && pendingCardinal.key === key) {
-            pendingCardinal = null;
-            onKeyPress(key);
-          }
-        }, CHORD_WINDOW_MS);
-        pendingCardinal = { key, timestamp: performance.now(), timerId };
-        return;
-      }
-    }
-
-    // Non-cardinal or no diagonals unlocked - fire immediately
     onKeyPress(key);
   }
 });
@@ -1259,12 +1248,12 @@ function applyPrestigeEffects() {
 
   // Quick Fingers: widen hit windows by 20%
   if (hasPrestigeUpgrade(state, 'quick_fingers')) {
-    HIT_PERFECT_MS = 96;
+    HIT_PERFECT_MS = 106;
     HIT_GOOD_MS = 192;
     HIT_OK_MS = 336;
     MISS_THRESHOLD_MS = 456;
   } else {
-    HIT_PERFECT_MS = 80;
+    HIT_PERFECT_MS = 88;
     HIT_GOOD_MS = 160;
     HIT_OK_MS = 280;
     MISS_THRESHOLD_MS = 380;
