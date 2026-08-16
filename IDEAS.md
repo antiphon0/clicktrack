@@ -29,7 +29,7 @@ from becoming a no-penalty play mode.
 
 ---
 
-## Improve — a star-power equivalent
+## Improve: a star-power equivalent
 
 Guitar Hero's star power, adapted to Clicktrack.
 
@@ -37,7 +37,7 @@ Guitar Hero's star power, adapted to Clicktrack.
 window fills a bar. The window matters: it should reward a concentrated hot
 streak rather than slow accumulation over a whole session.
 
-**Activation.** **Tap Shift** to activate — press and release with no lane key in
+**Activation.** **Tap Shift** to activate, pressing and releasing with no lane key in
 between. The key must be rebindable.
 
 Deliberately a tap, not a hold. Shift is shared with upgrade-while-playing
@@ -54,13 +54,14 @@ when the meter is full, so a stray Shift with a partial bar does nothing.
 **The bar.** A visible meter in the play column showing fill progress, and
 showing drain while active.
 
-**What it does — "freestyle".** While held, the player freestyles over the song.
+**What it does, "freestyle".** Once activated it runs for a duration while the
+player freestyles over the song. Nothing stays held; see the activation note.
 The explicit design constraint: **it must not become a pure button mash.** Two
 sketched directions, not yet chosen:
 
-1. **Continue the pattern** — the game keeps presenting notes and the player
+1. **Continue the pattern.** The game keeps presenting notes and the player
    sustains what it is already showing.
-2. **Add on top** — the player layers extra notes of their own alongside the
+2. **Add on top.** The player layers extra notes of their own alongside the
    suggested ones.
 
 **Visuals.** On activation the grid lights up with sparkles and a "moonlight"
@@ -74,7 +75,7 @@ wash.
   Landing on the beat grid (`isTapOnBeat` already exists in `game.js`) is the
   obvious candidate.
 - Does the meter drain on a timer, or per note played?
-- What happens on a miss while active — early cancel, or just no penalty?
+- What happens on a miss while active, early cancel, or just no penalty?
 - Does it interact with dancers, or is it player-only like the manual bonus?
 - Chords and the tier-5 center key during freestyle: included or excluded?
 
@@ -88,5 +89,5 @@ wash.
   (or the merge needs deepening first) or old saves will wipe it.
 - Sparkle/moonlight effects are additive visual noise on the note track. Worth
   checking against the recent decision to strip the drop-shadow glow from notes
-  for readability — whatever this looks like, it must not make notes harder to
+  for readability. Whatever this looks like, it must not make notes harder to
   track while it is active.

@@ -628,7 +628,7 @@ function gameLoop() {
     const pastHitMs = now - note.hitTime;
 
     // Auto-hit lanes (diagonals): the game resolves them the moment they reach the hit line.
-    // Never wait for the player or a dancer — these are ambient bonus income.
+    // Never wait for the player or a dancer. These are ambient bonus income.
     if (isAutoKey(note.key) && pastHitMs >= 0) {
       autoLaneHit(note);
       activeNotes.splice(i, 1);
@@ -843,7 +843,7 @@ function autoDancerHit(note) {
 // Auto-hit lane (diagonal) resolves itself at the hit line. Flat, modest "ambient" income:
 // routed through the dancer source (no manual 2x, capped combo) at a fixed ×1 combo and "ok"
 // accuracy, so the rare-key value bonus still pays out but skill on the cardinals stays the
-// real earner. Kept quiet — no tap feedback, no streak — so it reads as background income
+// real earner. Kept quiet (no tap feedback, no streak) so it reads as background income
 // rather than a hit the player should have reacted to.
 // Player-initiated hit on an optional diagonal lane. Pays better than letting it resolve
 // itself (player source earns the manual bonus) but is pinned to x1 combo and never
@@ -1200,7 +1200,7 @@ function showFeedback(type, earned) {
 // Keyboard purchasing. Each lane buys its own upgrade at the current buy mode, so the
 // mapping needs no lookup table and is identical on WASD, arrows and numpad (all three
 // resolve to the same internal key). The center key buys the tier unlock instead, and is
-// deliberately NOT gated on the center lane being unlocked — tier 5 is what unlocks it,
+// deliberately NOT gated on the center lane being unlocked, since tier 5 unlocks it
 // so requiring it first would be circular.
 function buyFromKeyboard(key) {
   if (key === 'x') {

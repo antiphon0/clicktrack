@@ -67,7 +67,7 @@ const BPM_OPTIONS = [
 // Purely a readability setting: notes cover the same track in less time, so consecutive
 // beats land further apart and dense music stops bunching up at the hit line. Hit windows
 // are absolute ms and are deliberately NOT scaled here, so hyperspeed never changes
-// difficulty of timing or payout — only how much room the notes have to breathe.
+// difficulty of timing or payout, only how much room the notes have to breathe.
 const HYPERSPEED_OPTIONS = [
   { mult: 1, label: '1x' },
   { mult: 2, label: '2x' },
