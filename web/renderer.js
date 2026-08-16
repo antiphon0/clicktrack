@@ -623,7 +623,9 @@ function gameLoop() {
 
     const topPercent = progress * 100;
     note.element.style.top = topPercent + '%';
-    note.element.style.opacity = Math.min(1, progress * 2);
+    // No fade-in. It ramped opacity over the first half of a note's travel, which at
+    // higher note speeds is most of the time the note exists, so the player spent the
+    // lead time reading a ghost. That cancelled out the point of raising note speed.
 
     const pastHitMs = now - note.hitTime;
 

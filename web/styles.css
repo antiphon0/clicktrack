@@ -387,7 +387,9 @@ body {
   height: 56px;
   display: block;
   overflow: visible;
-  opacity: 0;
+  /* Fully opaque from spawn. The transition is retained only for the hit/miss states
+     below, which fade the note out deliberately. */
+  opacity: 1;
   transition: opacity 0.1s;
   pointer-events: none;
   z-index: 2;
