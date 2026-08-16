@@ -94,12 +94,25 @@ function getScrollTimeMs(baseMs, hyperspeed) {
 //   3. Meter    - a token bucket bounds how often chords can happen at all. Burst
 //                 capacity lets a genuinely heavy part land two in quick succession,
 //                 then forces a drought while the bucket refills.
+// Tuning note: the first pass at these (0.9 / 2 / 10000 / 2500) held chords to about
+// 6 per minute, which played as too rare. These are the dials to turn if it still feels
+// wrong - lower the percentile to catch more onsets, shorten the refill for a higher
+// long-run rate, raise the bucket to allow longer bursts in a heavy section.
 const CHORD_MAGNITUDE_FLOOR = 1.8;    // absolute minimum rms/avg ratio
-const CHORD_PERCENTILE = 0.9;         // must beat this quantile of recent onsets
+const CHORD_PERCENTILE = 0.75;        // must beat this quantile of recent onsets
 const CHORD_MIN_SAMPLES = 8;          // no "standout" judgement without enough history
-const CHORD_BUCKET_MAX = 2;           // burst capacity
-const CHORD_BUCKET_REFILL_MS = 10000; // one token per 10s => long-run ceiling
-const CHORD_MIN_GAP_MS = 2500;        // hard floor between consecutive chords
+const CHORD_BUCKET_MAX = 3;           // burst capacity
+const CHORD_BUCKET_REFILL_MS = 5000;  // one token per 5s => ~12/min long-run ceiling
+const CHORD_MIN_GAP_MS = 1800;        // hard floor between consecutive chords
+// Rank alone cannot tell "genuinely dynamic" from "uniformly loud": in any material with
+// noise roughly a quarter of onsets sit above p75, so the meter ends up the only real
+// limit and a flat wall of sound chords exactly as often as a track with real accents.
+// This demands the hit also be much bigger than what is typical right now, which is what
+// actually distinguishes an accent from a plateau.
+// 1.25 chosen by sweep: it zeroes out flat plateaus while leaving heavy sections near the
+// meter ceiling. Above ~1.35 there is a cliff where dense material collapses to almost no
+// chords, because a busy passage's own median rises and the bar outruns its peaks.
+const CHORD_DYNAMIC_RATIO = 1.25;     // must be >= this multiple of the passage median
 
 function createChordMeter(now = 0) {
   return { tokens: CHORD_BUCKET_MAX, lastRefill: now, lastChord: -Infinity };
@@ -137,6 +150,9 @@ function shouldSpawnChord(meter, magnitude, recentMagnitudes, now) {
   // Strictly greater, not >=. In a uniformly loud passage every onset EQUALS the quantile,
   // so >= would let a wall of sound chord continuously - exactly the bug being fixed.
   if (bar === null || magnitude <= bar) return false;
+  // Dynamics gate: stand out against the passage's own typical level, not just its rank.
+  const median = magnitudeQuantile(recentMagnitudes, 0.5);
+  if (median !== null && magnitude < median * CHORD_DYNAMIC_RATIO) return false;
   meter.tokens -= 1;
   meter.lastChord = now;
   return true;

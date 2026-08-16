@@ -105,7 +105,7 @@ function detectInputMethod() {
   else detectedInputMethod = 'keyboard';
   if (detectedInputMethod !== prev) {
     updateUpgrades();
-    updateLaneLabels();
+    // Lane labels no longer vary by input method, so only the upgrade panel needs redrawing.
   }
 }
 
@@ -258,36 +258,14 @@ function rebuildLanes() {
     const label = document.createElement('div');
     label.className = `lane-label lane-label-key-${key}`;
     label.dataset.key = key;
-    if (detectedInputMethod === 'keyboard') {
-      const labelArrow = createArrowEl(key, true);
-      labelArrow.classList.add('label-arrow');
-      label.appendChild(labelArrow);
-    } else {
-      const txt = document.createElement('span');
-      txt.className = 'lane-label-text';
-      txt.textContent = getKeyDisplayName(key);
-      label.appendChild(txt);
-    }
+    // The label is the ghost target for what is about to arrive, so it always mirrors the
+    // note art regardless of input method. It used to swap to a bare text character for
+    // arrow/numpad players, which rendered a tiny glyph next to full-size notes.
+    const labelArrow = createArrowEl(key, true);
+    labelArrow.classList.add('label-arrow');
+    label.appendChild(labelArrow);
     laneLabels.appendChild(label);
   }
-}
-
-function updateLaneLabels() {
-  const labels = laneLabels.querySelectorAll('.lane-label');
-  labels.forEach((label) => {
-    const key = label.dataset.key;
-    label.innerHTML = '';
-    if (detectedInputMethod === 'keyboard') {
-      const labelArrow = createArrowEl(key, true);
-      labelArrow.classList.add('label-arrow');
-      label.appendChild(labelArrow);
-    } else {
-      const txt = document.createElement('span');
-      txt.className = 'lane-label-text';
-      txt.textContent = getKeyDisplayName(key);
-      label.appendChild(txt);
-    }
-  });
 }
 
 // --- Audio Setup Guide ---
