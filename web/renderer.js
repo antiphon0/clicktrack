@@ -199,7 +199,9 @@ function getPlayableKeys() {
 const LANE_ORDER = ['q', 'z', 'a', 's', 'w', 'd', 'e', 'c'];
 // 'x' is the tier-5 center key. Angle 0 because a diamond has no direction to point.
 const KEY_ANGLE = { w: 0, d: 90, s: 180, a: 270, e: 45, c: 135, z: 225, q: 315, x: 0 };
-const KEY_COLOR = { a: '#ff4455', w: '#44dd77', s: '#4499ff', d: '#ffdd33', q: '#cc44ff', e: '#ff8833', z: '#ff44cc', c: '#44ffcc', x: '#ffffff' };
+// x was #ffffff, which now disappears into the white note outline. #aaddff also matches
+// the --key-color already declared for .note-key-x in styles.css, which it had drifted from.
+const KEY_COLOR = { a: '#ff4455', w: '#44dd77', s: '#4499ff', d: '#ffdd33', q: '#cc44ff', e: '#ff8833', z: '#ff44cc', c: '#44ffcc', x: '#aaddff' };
 // KEY_GLOW removed with the note drop-shadow. The --key-glow CSS variables still exist
 // and drive the lane-label hit flash, which is a deliberate momentary pop, not scroll blur.
 // DDR-style arrow: wide head, narrow stem, clean proportions
@@ -232,12 +234,13 @@ function createArrowEl(key, isTarget) {
   } else {
     // Solid filled arrow for scrolling notes. Deliberately no drop-shadow: the glow
     // smeared the edges, and at higher note speeds a fast-moving halo reads as motion
-    // blur and makes the arrow hard to track. Colour and the dark stroke carry it.
+    // blur and makes the arrow hard to track. A hard white outline does the opposite,
+    // sharpening the silhouette against the dark track without adding any blur.
     const fill = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     fill.setAttribute('d', shape);
     fill.setAttribute('fill', color);
-    fill.setAttribute('stroke', '#111122');
-    fill.setAttribute('stroke-width', '3');
+    fill.setAttribute('stroke', '#ffffff');
+    fill.setAttribute('stroke-width', '3.5');
     fill.setAttribute('stroke-linejoin', 'round');
     g.appendChild(fill);
   }
