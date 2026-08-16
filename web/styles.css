@@ -294,6 +294,8 @@ body {
 #lanes-container[data-count="6"], #lane-labels[data-count="6"] { max-width: 51%; left: 0; right: 0; }
 #lanes-container[data-count="7"], #lane-labels[data-count="7"] { max-width: 62%; left: 0; right: 0; }
 #lanes-container[data-count="8"], #lane-labels[data-count="8"] { max-width: 100%; left: 0; right: 0; }
+/* 9 lanes = all 8 arrows plus the tier-5 center key */
+#lanes-container[data-count="9"], #lane-labels[data-count="9"] { max-width: 100%; left: 0; right: 0; }
 
 .lane {
   flex: 1;

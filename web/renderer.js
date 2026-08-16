@@ -7,7 +7,6 @@ let isListening = false;
 let audioContext = null;
 let analyserNode = null;
 let mediaStream = null;
-let saveInterval = null;
 let animFrameId = null;
 
 // Buy mode for bulk upgrades: '1x', '10x', '100x', 'max'
@@ -78,9 +77,11 @@ let recentInputCodes = []; // raw e.code values
 let detectedInputMethod = 'keyboard'; // 'keyboard' | 'arrows' | 'numpad'
 
 const DISPLAY_NAMES = {
-  keyboard: { w: 'W', a: 'A', s: 'S', d: 'D', q: 'Q', e: 'E', z: 'Z', c: 'C' },
-  arrows:   { w: '\u2191', a: '\u2190', s: '\u2193', d: '\u2192', q: '\u2196', e: '\u2197', z: '\u2199', c: '\u2198' },
-  numpad:   { w: '8', a: '4', s: '5', d: '6', q: '7', e: '9', z: '1', c: '3' },
+  // The tier-5 center key is Space on keyboard and arrows (there is no ninth arrow), and
+  // Numpad 0 for the numpad layout.
+  keyboard: { w: 'W', a: 'A', s: 'S', d: 'D', q: 'Q', e: 'E', z: 'Z', c: 'C', x: 'SPACE' },
+  arrows:   { w: '\u2191', a: '\u2190', s: '\u2193', d: '\u2192', q: '\u2196', e: '\u2197', z: '\u2199', c: '\u2198', x: 'SPACE' },
+  numpad:   { w: '8', a: '4', s: '5', d: '6', q: '7', e: '9', z: '1', c: '3', x: '0' },
 };
 
 function getKeyDisplayName(key) {
@@ -187,16 +188,22 @@ function getUnlockedKeys() {
 // Lane order matches physical keyboard position left-to-right (QWERTY x-offsets),
 // with W and S swapped so the down arrow sits on the middle-left and up arrow on the middle-right
 const LANE_ORDER = ['q', 'z', 'a', 's', 'w', 'd', 'e', 'c'];
-const KEY_ANGLE = { w: 0, d: 90, s: 180, a: 270, e: 45, c: 135, z: 225, q: 315 };
-const KEY_COLOR = { a: '#ff4455', w: '#44dd77', s: '#4499ff', d: '#ffdd33', q: '#cc44ff', e: '#ff8833', z: '#ff44cc', c: '#44ffcc' };
-const KEY_GLOW  = { a: 'rgba(255,68,85,0.9)', w: 'rgba(68,221,119,0.9)', s: 'rgba(68,153,255,0.9)', d: 'rgba(255,221,51,0.9)', q: 'rgba(204,68,255,0.9)', e: 'rgba(255,136,51,0.9)', z: 'rgba(255,68,204,0.9)', c: 'rgba(68,255,204,0.9)' };
+// 'x' is the tier-5 center key. Angle 0 because a diamond has no direction to point.
+const KEY_ANGLE = { w: 0, d: 90, s: 180, a: 270, e: 45, c: 135, z: 225, q: 315, x: 0 };
+const KEY_COLOR = { a: '#ff4455', w: '#44dd77', s: '#4499ff', d: '#ffdd33', q: '#cc44ff', e: '#ff8833', z: '#ff44cc', c: '#44ffcc', x: '#ffffff' };
+const KEY_GLOW  = { a: 'rgba(255,68,85,0.9)', w: 'rgba(68,221,119,0.9)', s: 'rgba(68,153,255,0.9)', d: 'rgba(255,221,51,0.9)', q: 'rgba(204,68,255,0.9)', e: 'rgba(255,136,51,0.9)', z: 'rgba(255,68,204,0.9)', c: 'rgba(68,255,204,0.9)', x: 'rgba(255,255,255,0.95)' };
 // DDR-style arrow: wide head, narrow stem, clean proportions
 const ARROW_SHAPE = 'M 50,4 L 92,46 L 66,46 L 66,96 L 34,96 L 34,46 L 8,46 Z';
+// Center key (tier 5) is a diamond, so it reads as "no direction, just hit it" and stays
+// visually distinct from the eight arrows at a glance.
+const CENTER_SHAPE = 'M 50,6 L 94,50 L 50,94 L 6,50 Z';
+const KEY_SHAPE = { x: CENTER_SHAPE };
 
 function createArrowEl(key, isTarget) {
   const angle = KEY_ANGLE[key] ?? 0;
   const color = KEY_COLOR[key] || '#ffffff';
   const glow  = KEY_GLOW[key]  || 'rgba(255,255,255,0.5)';
+  const shape = KEY_SHAPE[key] || ARROW_SHAPE;
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 100 100');
 
@@ -207,7 +214,7 @@ function createArrowEl(key, isTarget) {
     // Hollow ghost arrow at the hit zone
     svg.style.opacity = '0.35';
     const outline = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    outline.setAttribute('d', ARROW_SHAPE);
+    outline.setAttribute('d', shape);
     outline.setAttribute('fill', 'none');
     outline.setAttribute('stroke', color);
     outline.setAttribute('stroke-width', '2.5');
@@ -217,7 +224,7 @@ function createArrowEl(key, isTarget) {
     // Solid filled arrow for scrolling notes
     svg.style.filter = `drop-shadow(0 0 6px ${glow})`;
     const fill = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-    fill.setAttribute('d', ARROW_SHAPE);
+    fill.setAttribute('d', shape);
     fill.setAttribute('fill', color);
     fill.setAttribute('stroke', '#111122');
     fill.setAttribute('stroke-width', '3');
@@ -1090,6 +1097,9 @@ document.addEventListener('keydown', (e) => {
     '7': 'q', '8': 'w', '9': 'e',
     '4': 'a', '5': 's', '6': 'd',
     '1': 'z', '3': 'c',
+    // Tier-5 center key. Space works on every layout; Numpad 0 and 2 are the numpad
+    // equivalents (2 is the only free numpad direction, 5 is already taken by 's').
+    'Space': 'x', 'Numpad0': 'x', 'Numpad2': 'x',
   };
 
   const key = KEY_MAP[e.code] || KEY_MAP[e.key] || e.key.toLowerCase();
@@ -1449,7 +1459,7 @@ function importSave() {
     saveGame();
     const el = document.getElementById('tap-feedback');
     if (el) { el.textContent = 'Save imported!'; el.className = 'feedback-perfect'; }
-  } catch (e) {
+  } catch {
     alert('Failed to import save. Make sure you pasted the full string.');
   }
 }
@@ -1724,7 +1734,8 @@ function init() {
     setTimeout(showTutorial, 600);
   }
 
-  saveInterval = setInterval(() => {
+  // Handle intentionally not retained: the autosave runs for the life of the page.
+  setInterval(() => {
     saveGame();
     updateUpgrades();
     updateDancerPanel();
