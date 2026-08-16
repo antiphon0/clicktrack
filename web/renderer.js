@@ -65,15 +65,14 @@ let dancerStreak = 0;
 let accuracyCounts = { perfect: 0, good: 0, ok: 0, miss: 0 };
 let PASSIVE_PER_BEAT = 0.1;
 
-// --- Chord detection (two cardinals → diagonal) ---
-const CHORD_MAP = {
-  'a+w': 'q', 'w+a': 'q',  // left + up    = up-left
-  'd+w': 'e', 'w+d': 'e',  // right + up   = up-right
-  'a+s': 'z', 's+a': 'z',  // left + down  = down-left
-  'd+s': 'c', 's+d': 'c',  // right + down = down-right
-};
-const CHORD_WINDOW_MS = 80;
-let pendingCardinal = null; // { key, timestamp, timerId }
+// --- Auto-hit bonus lanes ---
+// The player's skill gameplay is the four cardinals plus the tier-5 center key. The
+// diagonals (q/e/z/c) are NOT played: they scroll in their own dimmed lanes and the game
+// resolves them at the hit line for modest ambient income. Eight playable lanes overwhelmed
+// testers. This also removes the old two-cardinal chord input, which buffered every
+// cardinal press for 80ms and made the core lanes feel laggy.
+const AUTO_KEYS = ['q', 'e', 'z', 'c'];
+const isAutoKey = (key) => AUTO_KEYS.includes(key);
 
 // --- Input method detection ---
 const INPUT_HISTORY_SIZE = 5;
@@ -189,6 +188,11 @@ function getUnlockedKeys() {
   return ALL_KEYS.filter((k) => state.keys[k]?.unlocked);
 }
 
+// Keys the player actually hits: everything unlocked except the auto-resolving diagonals.
+function getPlayableKeys() {
+  return getUnlockedKeys().filter((k) => !isAutoKey(k));
+}
+
 // Lane order matches physical keyboard position left-to-right (QWERTY x-offsets),
 // with W and S swapped so the down arrow sits on the middle-left and up arrow on the middle-right
 const LANE_ORDER = ['q', 'z', 'a', 's', 'w', 'd', 'e', 'c'];
@@ -251,12 +255,12 @@ function rebuildLanes() {
 
   for (const key of sorted) {
     const lane = document.createElement('div');
-    lane.className = 'lane';
+    lane.className = 'lane' + (isAutoKey(key) ? ' auto-lane' : '');
     lane.dataset.key = key;
     lanesContainer.appendChild(lane);
 
     const label = document.createElement('div');
-    label.className = `lane-label lane-label-key-${key}`;
+    label.className = `lane-label lane-label-key-${key}` + (isAutoKey(key) ? ' auto-lane' : '');
     label.dataset.key = key;
     // The label is the ghost target for what is about to arrive, so it always mirrors the
     // note art regardless of input method. It used to swap to a bare text character for
@@ -505,7 +509,9 @@ function weightedKey(keys) {
 }
 
 function spawnNote(now, excludeKey = null, isChord = false) {
-  const allUnlocked = getUnlockedKeys();
+  // Chords must land on two lanes the player can actually press together. Ordinary notes
+  // may use the auto lanes, since those resolve themselves as ambient income.
+  const allUnlocked = isChord ? getPlayableKeys() : getUnlockedKeys();
   const unlocked = excludeKey ? allUnlocked.filter((k) => k !== excludeKey) : allUnlocked;
   if (unlocked.length === 0) return null;
 
@@ -569,7 +575,7 @@ function gameLoop() {
     // both notes can be styled as a pair, and only asked once so it spends one token.
     if (!chordMeter) chordMeter = createChordMeter(now);
     const chord = audioOnset
-      && getUnlockedKeys().length >= 2
+      && getPlayableKeys().length >= 2
       && shouldSpawnChord(chordMeter, onsetMagnitude, recentOnsetMagnitudes, now);
 
     const firstKey = spawnNote(now, null, chord);
@@ -591,6 +597,14 @@ function gameLoop() {
     note.element.style.opacity = Math.min(1, progress * 2);
 
     const pastHitMs = now - note.hitTime;
+
+    // Auto-hit lanes (diagonals): the game resolves them the moment they reach the hit line.
+    // Never wait for the player or a dancer — these are ambient bonus income.
+    if (isAutoKey(note.key) && pastHitMs >= 0) {
+      autoLaneHit(note);
+      activeNotes.splice(i, 1);
+      continue;
+    }
 
     // Dancers only step in AFTER the player's full hit window passes (fallback, not autopilot)
     if (pastHitMs > HIT_OK_MS && state.dancers && state.dancers.count > 0) {
@@ -658,6 +672,7 @@ function flashLane(key) {
 }
 
 function onKeyPress(key) {
+  if (isAutoKey(key)) return; // diagonals are auto-hit, never player-played
   if (!state.keys[key]?.unlocked) return;
 
   flashLane(key);
@@ -792,6 +807,28 @@ function autoDancerHit(note) {
   updateCurrency();
   updateCombo();
   updateAccuracy();
+  updateStats();
+  runAchievementCheck();
+}
+
+// Auto-hit lane (diagonal) resolves itself at the hit line. Flat, modest "ambient" income:
+// routed through the dancer source (no manual 2x, capped combo) at a fixed ×1 combo and "ok"
+// accuracy, so the rare-key value bonus still pays out but skill on the cardinals stays the
+// real earner. Kept quiet — no tap feedback, no streak — so it reads as background income
+// rather than a hit the player should have reacted to.
+function autoLaneHit(note) {
+  note.hit = true;
+  note.element.classList.add('note-hit');
+  setTimeout(() => {
+    if (note.element.parentNode) note.element.parentNode.removeChild(note.element);
+  }, 150);
+  const result = processTap(state, note.key, 'ok', { source: 'dancer', externalCombo: 1 });
+  if (bpmEarningsMult !== 1) {
+    const bonus = result.earned * (bpmEarningsMult - 1);
+    state.currency += bonus;
+    state.totalEarned += bonus;
+  }
+  updateCurrency();
   updateStats();
   runAchievementCheck();
 }
@@ -1109,49 +1146,9 @@ document.addEventListener('keydown', (e) => {
     if (recentInputCodes.length > INPUT_HISTORY_SIZE) recentInputCodes.shift();
     detectInputMethod();
 
-    const cardinals = ['w', 'a', 's', 'd'];
-    const isCardinal = cardinals.includes(key);
+    // Diagonals are auto-hit by the game, not the player — ignore any press on them.
+    if (isAutoKey(key)) return;
 
-    // If a cardinal is pending and this cardinal completes a chord, fire the diagonal
-    if (isCardinal && pendingCardinal && pendingCardinal.key !== key) {
-      const chordKey = CHORD_MAP[pendingCardinal.key + '+' + key];
-      if (chordKey && state.keys[chordKey]?.unlocked) {
-        clearTimeout(pendingCardinal.timerId);
-        pendingCardinal = null;
-        onKeyPress(chordKey);
-        return;
-      }
-    }
-
-    // If this is a cardinal and diagonals are unlocked, buffer it briefly
-    if (isCardinal) {
-      // Check if any diagonal using this key is unlocked
-      const hasDiagonal = cardinals.some(other => {
-        if (other === key) return false;
-        const dk = CHORD_MAP[key + '+' + other];
-        return dk && state.keys[dk]?.unlocked;
-      });
-
-      if (hasDiagonal) {
-        // Flush any existing pending cardinal first
-        if (pendingCardinal) {
-          clearTimeout(pendingCardinal.timerId);
-          onKeyPress(pendingCardinal.key);
-          pendingCardinal = null;
-        }
-        // Buffer this cardinal
-        const timerId = setTimeout(() => {
-          if (pendingCardinal && pendingCardinal.key === key) {
-            pendingCardinal = null;
-            onKeyPress(key);
-          }
-        }, CHORD_WINDOW_MS);
-        pendingCardinal = { key, timestamp: performance.now(), timerId };
-        return;
-      }
-    }
-
-    // Non-cardinal or no diagonals unlocked - fire immediately
     onKeyPress(key);
   }
 });
