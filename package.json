@@ -3,8 +3,8 @@
   "version": "0.1.0",
   "description": "A rhythm-based incremental game synced to your music",
   "scripts": {
-    "start": "python -m http.server 8080 -d web",
-    "dev": "python -m http.server 8080 -d web",
+    "start": "python devserver.py",
+    "dev": "python devserver.py",
     "test": "node --test",
     "lint": "eslint web test build-single.js"
   },
