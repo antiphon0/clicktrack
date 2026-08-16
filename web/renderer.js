@@ -632,9 +632,10 @@ function gameLoop() {
 
     const pastHitMs = now - note.hitTime;
 
-    // Auto-hit lanes (diagonals): the game resolves them the moment they reach the hit line.
-    // Never wait for the player or a dancer. These are ambient bonus income.
-    if (isAutoKey(note.key) && pastHitMs >= 0) {
+    // Diagonals resolve themselves only AFTER the player's full window has passed, exactly
+    // like the dancer fallback below. Resolving at pastHitMs >= 0 stole the note on the
+    // beat, leaving only the early half hittable, which is why playing them felt dead.
+    if (isAutoKey(note.key) && pastHitMs > HIT_OK_MS) {
       autoLaneHit(note);
       activeNotes.splice(i, 1);
       continue;
@@ -706,7 +707,6 @@ function flashLane(key) {
 }
 
 function onKeyPress(key) {
-  if (isAutoKey(key)) return; // diagonals are auto-hit, never player-played
   if (!state.keys[key]?.unlocked) return;
 
   flashLane(key);
@@ -850,52 +850,6 @@ function autoDancerHit(note) {
 // accuracy, so the rare-key value bonus still pays out but skill on the cardinals stays the
 // real earner. Kept quiet (no tap feedback, no streak) so it reads as background income
 // rather than a hit the player should have reacted to.
-// Player-initiated hit on an optional diagonal lane. Pays better than letting it resolve
-// itself (player source earns the manual bonus) but is pinned to x1 combo and never
-// touches playerStreak in either direction. Combo stays purely about the cardinals, so
-// these cannot be mashed to inflate a streak, and ignoring them cannot break one.
-function onAutoLanePress(key) {
-  if (!state.keys[key]?.unlocked) return;
-  flashLane(key);
-
-  const now = performance.now();
-  let bestNote = null;
-  let bestOffset = Infinity;
-  for (const note of activeNotes) {
-    if (note.hit || note.key !== key) continue;
-    const abs = Math.abs(now - note.hitTime);
-    if (abs < bestOffset && abs <= MISS_THRESHOLD_MS) {
-      bestOffset = abs;
-      bestNote = note;
-    }
-  }
-
-  // Nothing there: silently ignore. A stray press on an optional lane must never whiff,
-  // or "free bonus, hit them if you like" would be a lie.
-  if (!bestNote) return;
-
-  const accuracy = classifyTiming(now - bestNote.hitTime) || 'ok';
-  bestNote.hit = true;
-  bestNote.element.classList.add('note-hit');
-  setTimeout(() => {
-    if (bestNote.element.parentNode) bestNote.element.parentNode.removeChild(bestNote.element);
-    const idx = activeNotes.indexOf(bestNote);
-    if (idx >= 0) activeNotes.splice(idx, 1);
-  }, 150);
-
-  const result = processTap(state, key, accuracy, { source: 'player', externalCombo: 1 });
-  if (bpmEarningsMult !== 1) {
-    const bonus = result.earned * (bpmEarningsMult - 1);
-    state.currency += bonus;
-    state.totalEarned += bonus;
-  }
-  showFeedback(accuracy, result.earned);
-  accuracyCounts[accuracy]++;
-  updateCurrency();
-  updateAccuracy();
-  updateStats();
-  runAchievementCheck();
-}
 
 function autoLaneHit(note) {
   note.hit = true;
@@ -1279,9 +1233,9 @@ document.addEventListener('keydown', (e) => {
     if (recentInputCodes.length > INPUT_HISTORY_SIZE) recentInputCodes.shift();
     detectInputMethod();
 
-    // Diagonals are optional bonus lanes: hittable for a better payout, but ignoring them
-    // costs nothing because they resolve themselves at the line.
-    if (isAutoKey(key)) { onAutoLanePress(key); return; }
+    // Diagonals are no longer special-cased on input. They are ordinary notes that happen
+    // to forgive being ignored: hit one and it scores and builds combo like any other,
+    // leave it and it resolves itself for ambient income with no combo penalty.
 
     // Shift + lane key buys that lane's upgrade WITHOUT skipping the note, so progression
     // never costs you a combo. When Improve is built, this branch is also where the Shift
