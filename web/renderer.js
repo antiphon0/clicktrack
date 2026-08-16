@@ -1073,6 +1073,19 @@ function updateAchievementsPanel() {
   achievementListEl.innerHTML = html;
 }
 
+// Small, quiet confirmation for keyboard purchases. Only one is ever on screen: a rapid
+// series of upgrades should not stack a column of toasts.
+let purchaseToastEl = null;
+function showToast(msg) {
+  if (purchaseToastEl && purchaseToastEl.parentNode) purchaseToastEl.remove();
+  const el = document.createElement('div');
+  el.className = 'purchase-toast';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  purchaseToastEl = el;
+  setTimeout(() => { if (el.parentNode) el.remove(); }, 1100);
+}
+
 function showAchievementToast(ach) {
   const toast = document.createElement('div');
   toast.className = 'achievement-toast';
@@ -1113,6 +1126,41 @@ function showFeedback(type, earned) {
     tapFeedbackEl.textContent = '';
     tapFeedbackEl.className = '';
   }, 600);
+}
+
+// Keyboard purchasing. Each lane buys its own upgrade at the current buy mode, so the
+// mapping needs no lookup table and is identical on WASD, arrows and numpad (all three
+// resolve to the same internal key). The center key buys the tier unlock instead, and is
+// deliberately NOT gated on the center lane being unlocked — tier 5 is what unlocks it,
+// so requiring it first would be circular.
+function buyFromKeyboard(key) {
+  if (key === 'x') {
+    const before = state.tierUnlocked;
+    unlockTier(state);
+    if (state.tierUnlocked !== before) {
+      rebuildLanes();
+      afterKeyboardPurchase(`Tier ${state.tierUnlocked} unlocked`);
+    }
+    return;
+  }
+
+  const count = resolveBuyCount(state, key, buyMode);
+  if (count < 1) return; // unaffordable or locked: stay silent, the note still counted
+  const { bought } = upgradeKeyBulk(state, key, count);
+  if (bought > 0) {
+    afterKeyboardPurchase(`${getKeyDisplayName(key)} +${bought}`);
+  }
+}
+
+// Shared refresh after a keyboard purchase. Skips showFeedback so it cannot stomp the
+// hit rating for the same press, which the player still needs to read.
+function afterKeyboardPurchase(msg) {
+  updateCurrency();
+  updateUpgrades();
+  updateStats();
+  runAchievementCheck();
+  saveGame();
+  showToast(msg);
 }
 
 // --- Events ---
@@ -1156,12 +1204,22 @@ document.addEventListener('keydown', (e) => {
     // Diagonals are auto-hit by the game, not the player — ignore any press on them.
     if (isAutoKey(key)) return;
 
+    // Shift + lane key buys that lane's upgrade WITHOUT skipping the note, so progression
+    // never costs you a combo. When Improve is built, this branch is also where the Shift
+    // press gets marked "consumed", so a bare Shift tap can mean activation instead.
+    if (e.shiftKey) {
+      onKeyPress(key);
+      buyFromKeyboard(key);
+      return;
+    }
+
     onKeyPress(key);
   }
 });
 
-document.addEventListener('keyup', (e) => {
-  // no-op, chord detection uses buffering not held-key tracking
+document.addEventListener('keyup', () => {
+  // Improve hooks in here: on Shift release, if no lane key was pressed during the hold,
+  // that was a bare tap and should activate Improve rather than buy anything.
 });
 
 unlockTierBtn.addEventListener('click', () => {

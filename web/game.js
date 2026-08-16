@@ -367,6 +367,18 @@ function upgradeKeyBulk(state, key, count) {
 }
 
 // Unlock the next tier of keys
+// How many levels a buy of `buyMode` ('1x'|'10x'|'100x'|'Max') would actually purchase
+// for `key` right now. Returns 0 when unaffordable, so callers can treat 0 as "no sale".
+// Pure so the keyboard shortcut and the on-screen buttons cannot drift apart.
+function resolveBuyCount(state, key, buyMode) {
+  const ks = state?.keys?.[key];
+  if (!ks || !ks.unlocked) return 0;
+  if (buyMode === 'Max') return getMaxAffordableUpgrades(state, key);
+  const n = parseInt(buyMode, 10);
+  if (!Number.isFinite(n) || n < 1) return 0;
+  return state.currency >= getBulkUpgradeCost(ks.level, n) ? n : 0;
+}
+
 function unlockTier(state) {
   const nextTier = state.tierUnlocked + 1;
   const tierDef = KEY_TIERS.find((t) => t.tier === nextTier);
@@ -562,6 +574,7 @@ if (typeof module !== 'undefined') {
     upgradeKeyBulk,
     getBulkUpgradeCost,
     getMaxAffordableUpgrades,
+    resolveBuyCount,
     unlockTier,
     getKeyUpgradeCost,
     getKeyValue,
@@ -611,6 +624,7 @@ if (typeof module !== 'undefined') {
     upgradeKeyBulk,
     getBulkUpgradeCost,
     getMaxAffordableUpgrades,
+    resolveBuyCount,
     unlockTier,
     getKeyUpgradeCost,
     getKeyValue,

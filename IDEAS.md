@@ -13,7 +13,19 @@ Guitar Hero's star power, adapted to Clicktrack.
 window fills a bar. The window matters: it should reward a concentrated hot
 streak rather than slow accumulation over a whole session.
 
-**Activation.** Hold **Shift** to activate. The key must be rebindable.
+**Activation.** **Tap Shift** to activate — press and release with no lane key in
+between. The key must be rebindable.
+
+Deliberately a tap, not a hold. Shift is shared with upgrade-while-playing
+(`Shift + lane key`), and a hold-to-sustain Improve would mean holding Shift
+while pressing lane keys, which is exactly the upgrade combo. Tap-to-activate
+also matches Guitar Hero, where star power runs on its own once triggered and
+you keep playing normally.
+
+**Disambiguation rule.** A Shift press is an upgrade if any lane key arrives
+before Shift is released, otherwise it is an Improve activation. That is exact
+at the event level rather than a timing guess. Improve additionally only fires
+when the meter is full, so a stray Shift with a partial bar does nothing.
 
 **The bar.** A visible meter in the play column showing fill progress, and
 showing drain while active.

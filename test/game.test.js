@@ -12,6 +12,7 @@ const {
   upgradeKeyBulk,
   getBulkUpgradeCost,
   getMaxAffordableUpgrades,
+  resolveBuyCount,
   unlockTier,
   getKeyUpgradeCost,
   getKeyValue,
@@ -359,6 +360,38 @@ test('migrateSave tolerates garbage input', { skip: 'migrateSave not implemented
     assert.ok(s.keys.w);
     assert.equal(typeof s.currency, 'number');
   }
+});
+
+// --- Keyboard purchasing (Shift + lane key) ---
+
+test('resolveBuyCount matches what the on-screen buttons would buy', () => {
+  const s = freshState();
+  s.currency = 1000;
+  assert.equal(resolveBuyCount(s, 'w', '1x'), 1);
+  assert.equal(resolveBuyCount(s, 'w', '10x'), 10);
+  // Max agrees with the helper the buttons use
+  assert.equal(resolveBuyCount(s, 'w', 'Max'), getMaxAffordableUpgrades(s, 'w'));
+});
+
+test('resolveBuyCount returns 0 when unaffordable, so a keypress is a no-op', () => {
+  const s = freshState();
+  s.currency = 0;
+  assert.equal(resolveBuyCount(s, 'w', '1x'), 0);
+  assert.equal(resolveBuyCount(s, 'w', 'Max'), 0);
+  // Affordable for 1 but not 100
+  s.currency = getKeyUpgradeCost(s.keys.w.level);
+  assert.equal(resolveBuyCount(s, 'w', '1x'), 1);
+  assert.equal(resolveBuyCount(s, 'w', '100x'), 0);
+});
+
+test('resolveBuyCount refuses locked keys and garbage buy modes', () => {
+  const s = freshState();
+  s.currency = 1e9;
+  assert.equal(resolveBuyCount(s, 's', '1x'), 0, 'tier-2 key is locked at start');
+  assert.equal(resolveBuyCount(s, 'w', 'nonsense'), 0);
+  assert.equal(resolveBuyCount(s, 'w', '0x'), 0);
+  assert.equal(resolveBuyCount(s, 'nope', '1x'), 0);
+  assert.equal(resolveBuyCount(null, 'w', '1x'), 0);
 });
 
 // --- Chord gating (simultaneous notes) ---
