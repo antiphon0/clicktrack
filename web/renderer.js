@@ -140,6 +140,7 @@ const laneLabels = $('#lane-labels');
 
 // Audio guide
 const audioGuideEl = $('#audio-guide');
+const audioGuideStepsEl = $('#audio-guide-steps');
 const audioGuideStatusEl = $('#audio-guide-status');
 const audioGuideCloseBtn = $('#audio-guide-close');
 const audioHelpBtn = $('#audio-help-btn');
@@ -275,6 +276,8 @@ function rebuildLanes() {
 // --- Audio Setup Guide ---
 function showAudioGuide() {
   audioGuideEl.style.display = '';
+  // Restore the checklist; a previous successful connect collapses it.
+  if (audioGuideStepsEl) audioGuideStepsEl.style.display = '';
   setGuideStep(1);
   setGuideStatus('', '');
 }
@@ -410,17 +413,20 @@ async function startCapture() {
 
     // Guide success
     if (audioGuideEl.style.display !== 'none') {
-      setGuideStep(6); // all done
+      // Collapse the checklist rather than ticking every step. Marking all five "done" lit
+      // up a column of green check-marked cards that reads as a pile of achievement
+      // unlocks and shoves the note track down the page. One confirmation line is enough.
+      if (audioGuideStepsEl) audioGuideStepsEl.style.display = 'none';
       if (usedDisplayMedia) {
         setGuideStatus('Audio connected! Notes will now sync to the beat of your music.', 'ok');
       } else {
         setGuideStatus('Connected via microphone. For best results, try tab sharing next time.', 'ok');
       }
       markAudioGuideDone();
-      // Auto-close guide after 3 seconds on success
+      // Auto-close the guide shortly after success
       setTimeout(() => {
         if (isListening) hideAudioGuide();
-      }, 3000);
+      }, 2500);
     }
 
     if (!animFrameId) gameLoop();
