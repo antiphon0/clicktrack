@@ -272,6 +272,28 @@ function rebuildLanes() {
     label.appendChild(labelArrow);
     laneLabels.appendChild(label);
   }
+
+  maybeShowAutoLaneHint();
+}
+
+// One-time reassurance the first time the dim lanes appear. Four extra lanes arriving at
+// once reads as "four more things I must hit"; they are optional, so say so before the
+// player panics. Fires from rebuildLanes so it covers the tier unlock however it was
+// bought (button or Shift + center key) and a reload that already has them.
+function maybeShowAutoLaneHint() {
+  if (localStorage.getItem('clicktrack_auto_lane_hint_done') === '1') return;
+  if (!getUnlockedKeys().some(isAutoKey)) return;
+
+  const noteTrack = document.getElementById('note-track');
+  if (!noteTrack || document.getElementById('auto-lane-hint')) return;
+
+  const hint = document.createElement('div');
+  hint.id = 'auto-lane-hint';
+  hint.className = 'auto-lane-hint';
+  hint.textContent = "Don't worry about the dim lanes. They score themselves, and you can hit them for extra if you like.";
+  noteTrack.appendChild(hint);
+  localStorage.setItem('clicktrack_auto_lane_hint_done', '1');
+  setTimeout(() => { if (hint.parentNode) hint.remove(); }, 9000);
 }
 
 // --- Audio Setup Guide ---
@@ -823,6 +845,53 @@ function autoDancerHit(note) {
 // accuracy, so the rare-key value bonus still pays out but skill on the cardinals stays the
 // real earner. Kept quiet — no tap feedback, no streak — so it reads as background income
 // rather than a hit the player should have reacted to.
+// Player-initiated hit on an optional diagonal lane. Pays better than letting it resolve
+// itself (player source earns the manual bonus) but is pinned to x1 combo and never
+// touches playerStreak in either direction. Combo stays purely about the cardinals, so
+// these cannot be mashed to inflate a streak, and ignoring them cannot break one.
+function onAutoLanePress(key) {
+  if (!state.keys[key]?.unlocked) return;
+  flashLane(key);
+
+  const now = performance.now();
+  let bestNote = null;
+  let bestOffset = Infinity;
+  for (const note of activeNotes) {
+    if (note.hit || note.key !== key) continue;
+    const abs = Math.abs(now - note.hitTime);
+    if (abs < bestOffset && abs <= MISS_THRESHOLD_MS) {
+      bestOffset = abs;
+      bestNote = note;
+    }
+  }
+
+  // Nothing there: silently ignore. A stray press on an optional lane must never whiff,
+  // or "free bonus, hit them if you like" would be a lie.
+  if (!bestNote) return;
+
+  const accuracy = classifyTiming(now - bestNote.hitTime) || 'ok';
+  bestNote.hit = true;
+  bestNote.element.classList.add('note-hit');
+  setTimeout(() => {
+    if (bestNote.element.parentNode) bestNote.element.parentNode.removeChild(bestNote.element);
+    const idx = activeNotes.indexOf(bestNote);
+    if (idx >= 0) activeNotes.splice(idx, 1);
+  }, 150);
+
+  const result = processTap(state, key, accuracy, { source: 'player', externalCombo: 1 });
+  if (bpmEarningsMult !== 1) {
+    const bonus = result.earned * (bpmEarningsMult - 1);
+    state.currency += bonus;
+    state.totalEarned += bonus;
+  }
+  showFeedback(accuracy, result.earned);
+  accuracyCounts[accuracy]++;
+  updateCurrency();
+  updateAccuracy();
+  updateStats();
+  runAchievementCheck();
+}
+
 function autoLaneHit(note) {
   note.hit = true;
   note.element.classList.add('note-hit');
@@ -1201,8 +1270,9 @@ document.addEventListener('keydown', (e) => {
     if (recentInputCodes.length > INPUT_HISTORY_SIZE) recentInputCodes.shift();
     detectInputMethod();
 
-    // Diagonals are auto-hit by the game, not the player — ignore any press on them.
-    if (isAutoKey(key)) return;
+    // Diagonals are optional bonus lanes: hittable for a better payout, but ignoring them
+    // costs nothing because they resolve themselves at the line.
+    if (isAutoKey(key)) { onAutoLanePress(key); return; }
 
     // Shift + lane key buys that lane's upgrade WITHOUT skipping the note, so progression
     // never costs you a combo. When Improve is built, this branch is also where the Shift
