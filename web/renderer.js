@@ -22,8 +22,12 @@ const ENERGY_HISTORY_SIZE = 43;
 const ONSET_THRESHOLD = 1.3;
 const ONSET_COOLDOWN_MS = 200;
 const MIN_ENERGY = 0.003;
-// Onsets at or above this magnitude (rms / rolling avg) spawn a 2-note chord
-const CHORD_MAGNITUDE_THRESHOLD = 1.8;
+// Chord gating lives in game.js (shouldSpawnChord). The renderer just keeps the running
+// state it needs: a token-bucket meter, and a rolling window of recent onset magnitudes
+// so "is this a big moment" is judged against the current passage, not a fixed number.
+const ONSET_MAGNITUDE_WINDOW = 40;
+let recentOnsetMagnitudes = [];
+let chordMeter = null;
 let energyHistory = [];
 let lastOnsetTime = 0;
 let totalBeatsDetected = 0;
@@ -522,7 +526,7 @@ function weightedKey(keys) {
   return keys[keys.length - 1];
 }
 
-function spawnNote(now, excludeKey = null) {
+function spawnNote(now, excludeKey = null, isChord = false) {
   const allUnlocked = getUnlockedKeys();
   const unlocked = excludeKey ? allUnlocked.filter((k) => k !== excludeKey) : allUnlocked;
   if (unlocked.length === 0) return null;
@@ -536,7 +540,9 @@ function spawnNote(now, excludeKey = null) {
 
   const noteEl = createArrowEl(key);
   noteEl.classList.add('note', `note-key-${key}`);
-  if (excludeKey) noteEl.classList.add('chord-note');
+  // Both halves of a chord get the class, so the pair is styled identically. Keying this
+  // off excludeKey marked only the second note, which made the pair look mismatched.
+  if (isChord) noteEl.classList.add('chord-note');
   noteEl.style.top = '0%';
   lane.appendChild(noteEl);
 
@@ -574,10 +580,23 @@ function gameLoop() {
     document.getElementById('app').classList.add('pulse');
     setTimeout(() => document.getElementById('app').classList.remove('pulse'), 150);
 
-    const firstKey = spawnNote(now);
-    // Chord on big hits (audio mode only): spawn a second simultaneous note
-    if (audioOnset && onsetMagnitude >= CHORD_MAGNITUDE_THRESHOLD && firstKey) {
-      spawnNote(now, firstKey);
+    // Track this onset's magnitude so chord gating can judge it against the passage.
+    if (audioOnset) {
+      recentOnsetMagnitudes.push(onsetMagnitude);
+      if (recentOnsetMagnitudes.length > ONSET_MAGNITUDE_WINDOW) recentOnsetMagnitudes.shift();
+    }
+
+    // Chords are audio-only, need somewhere to put the second note, and must clear the
+    // floor/relative/meter gates in shouldSpawnChord. Decided before the first spawn so
+    // both notes can be styled as a pair, and only asked once so it spends one token.
+    if (!chordMeter) chordMeter = createChordMeter(now);
+    const chord = audioOnset
+      && getUnlockedKeys().length >= 2
+      && shouldSpawnChord(chordMeter, onsetMagnitude, recentOnsetMagnitudes, now);
+
+    const firstKey = spawnNote(now, null, chord);
+    if (chord && firstKey) {
+      spawnNote(now, firstKey, true);
     }
   }
 

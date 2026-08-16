@@ -384,9 +384,11 @@ body {
 }
 
 /* Chord notes: paired with another simultaneous note. Bigger glow, slightly larger. */
+/* Chord notes are emphasised with glow ONLY. Do not scale them: a scaled arrow's tip and
+   tail extend past its unscaled partner, so the pair reads as misaligned even though both
+   share an identical top. Geometry must match normal notes exactly. */
 .note.chord-note {
-  filter: drop-shadow(0 0 10px var(--key-glow, rgba(255,255,255,0.8)));
-  transform: translateX(-50%) scale(1.15);
+  filter: drop-shadow(0 0 10px var(--key-glow, rgba(255,255,255,0.8))) brightness(1.15);
 }
 
 /* Per-key color variables (used for label-hit flash) */

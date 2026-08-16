@@ -34,6 +34,14 @@ const {
   ACCURACY_MULTIPLIERS,
   MANUAL_BONUS_MULTIPLIER,
   DANCER_COMBO_MULT_CAP,
+  createChordMeter,
+  shouldSpawnChord,
+  magnitudeQuantile,
+  CHORD_MAGNITUDE_FLOOR,
+  CHORD_MIN_SAMPLES,
+  CHORD_MIN_GAP_MS,
+  CHORD_BUCKET_MAX,
+  CHORD_BUCKET_REFILL_MS,
 } = game;
 
 function freshState() {
@@ -351,4 +359,82 @@ test('migrateSave tolerates garbage input', { skip: 'migrateSave not implemented
     assert.ok(s.keys.w);
     assert.equal(typeof s.currency, 'number');
   }
+});
+
+// --- Chord gating (simultaneous notes) ---
+
+// A passage of uniformly middling onsets, long enough to satisfy CHORD_MIN_SAMPLES.
+function quietPassage(n = 20, v = 1.0) {
+  return new Array(n).fill(v);
+}
+
+test('a weak onset never chords, however long the drought', () => {
+  const m = createChordMeter(0);
+  const passage = quietPassage();
+  assert.equal(shouldSpawnChord(m, CHORD_MAGNITUDE_FLOOR - 0.01, passage, 600000), false);
+});
+
+test('no chord until there is enough history to judge "standout"', () => {
+  const m = createChordMeter(0);
+  const tooFew = new Array(CHORD_MIN_SAMPLES - 1).fill(1.0);
+  assert.equal(shouldSpawnChord(m, 5.0, tooFew, 10000), false);
+  // Same huge onset succeeds once the window has filled out
+  const enough = new Array(CHORD_MIN_SAMPLES).fill(1.0);
+  assert.equal(shouldSpawnChord(m, 5.0, enough, 10000), true);
+});
+
+test('a strong-but-typical onset in a loud passage does NOT chord', () => {
+  const m = createChordMeter(0);
+  // Everything recent is loud, so 2.0 is unremarkable here even though it clears the floor
+  const loud = quietPassage(20, 2.0);
+  assert.ok(2.0 >= CHORD_MAGNITUDE_FLOOR, 'precondition: clears the absolute floor');
+  assert.equal(shouldSpawnChord(m, 2.0, loud, 10000), false);
+  // A genuine spike above the passage does chord
+  assert.equal(shouldSpawnChord(m, 4.0, loud, 10000), true);
+});
+
+test('chords cannot fire back to back inside the minimum gap', () => {
+  const m = createChordMeter(0);
+  const passage = quietPassage();
+  const t = 10000;
+  assert.equal(shouldSpawnChord(m, 5.0, passage, t), true);
+  // Still has a token, but the hard gap blocks it
+  assert.ok(m.tokens >= 1, 'precondition: a token remains');
+  assert.equal(shouldSpawnChord(m, 5.0, passage, t + CHORD_MIN_GAP_MS - 1), false);
+  assert.equal(shouldSpawnChord(m, 5.0, passage, t + CHORD_MIN_GAP_MS), true);
+});
+
+test('the bucket bounds chord frequency even under sustained loud music', () => {
+  const m = createChordMeter(0);
+  const passage = quietPassage();
+  let fired = 0;
+  // Hammer it with huge onsets every 250ms for a solid minute
+  for (let t = 10000; t < 70000; t += 250) {
+    if (shouldSpawnChord(m, 8.0, passage, t)) fired++;
+  }
+  // Burst capacity plus refills over ~60s, NOT one per onset (240 onsets)
+  const ceiling = CHORD_BUCKET_MAX + Math.ceil(60000 / CHORD_BUCKET_REFILL_MS);
+  assert.ok(fired <= ceiling, `fired ${fired}, expected <= ${ceiling}`);
+  assert.ok(fired > 0, 'should still fire sometimes on a genuine climax');
+});
+
+test('a full bucket does not bank credit across a long quiet stretch', () => {
+  const m = createChordMeter(0);
+  const passage = quietPassage();
+  // Ten minutes of silence, then a climax. Measured over a window shorter than one refill
+  // period so nothing is granted mid-test: the idle time must not have banked extra
+  // tokens, so this is capped at burst capacity no matter how long the drought was.
+  const start = 600000;
+  let fired = 0;
+  for (let t = start; t < start + CHORD_BUCKET_REFILL_MS; t += CHORD_MIN_GAP_MS) {
+    if (shouldSpawnChord(m, 8.0, passage, t)) fired++;
+  }
+  assert.equal(fired, CHORD_BUCKET_MAX, `fired ${fired}, expected exactly ${CHORD_BUCKET_MAX}`);
+});
+
+test('magnitudeQuantile handles empty and single-element input', () => {
+  assert.equal(magnitudeQuantile([], 0.9), null);
+  assert.equal(magnitudeQuantile(null, 0.9), null);
+  assert.equal(magnitudeQuantile([3], 0.9), 3);
+  assert.equal(magnitudeQuantile([1, 2, 3, 4, 5], 1.0), 5);
 });

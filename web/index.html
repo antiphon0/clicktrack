@@ -4,7 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Clicktrack</title>
-  <link rel="stylesheet" href="styles.css">
+  <!-- ?v= is a cache buster. There is no build step, so browsers will happily serve a
+       stale game.js/renderer.js against fresh HTML, which throws on elements that no
+       longer exist and kills init(). Bump this when assets change. -->
+  <link rel="stylesheet" href="styles.css?v=3">
 </head>
 <body>
   <div id="app">
@@ -179,7 +182,7 @@
     </div>
   </div>
 
-  <script src="game.js"></script>
-  <script src="renderer.js"></script>
+  <script src="game.js?v=3"></script>
+  <script src="renderer.js?v=3"></script>
 </body>
 </html>

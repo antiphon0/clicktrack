@@ -83,6 +83,65 @@ function getScrollTimeMs(baseMs, hyperspeed) {
   return baseMs / (opt ? opt.mult : 1);
 }
 
+// --- Chord gating (simultaneous notes) ---
+// A two-note chord should read as the music hitting hard, not as background texture.
+// A single absolute threshold cannot do that: loud material sits above any fixed line
+// permanently, which is why chords currently fire constantly. Three gates instead, all
+// of which must pass:
+//   1. Floor    - the onset is objectively strong (rms vs its rolling average).
+//   2. Relative - it also stands out against THIS passage's own recent onsets, so a
+//                 uniformly loud section stops reading as one endless climax.
+//   3. Meter    - a token bucket bounds how often chords can happen at all. Burst
+//                 capacity lets a genuinely heavy part land two in quick succession,
+//                 then forces a drought while the bucket refills.
+const CHORD_MAGNITUDE_FLOOR = 1.8;    // absolute minimum rms/avg ratio
+const CHORD_PERCENTILE = 0.9;         // must beat this quantile of recent onsets
+const CHORD_MIN_SAMPLES = 8;          // no "standout" judgement without enough history
+const CHORD_BUCKET_MAX = 2;           // burst capacity
+const CHORD_BUCKET_REFILL_MS = 10000; // one token per 10s => long-run ceiling
+const CHORD_MIN_GAP_MS = 2500;        // hard floor between consecutive chords
+
+function createChordMeter(now = 0) {
+  return { tokens: CHORD_BUCKET_MAX, lastRefill: now, lastChord: -Infinity };
+}
+
+// Nearest-rank quantile of an unsorted numeric array. Null when there is nothing to rank.
+function magnitudeQuantile(values, q) {
+  if (!values || values.length === 0) return null;
+  const sorted = [...values].sort((a, b) => a - b);
+  const idx = Math.min(sorted.length - 1, Math.max(0, Math.ceil(q * sorted.length) - 1));
+  return sorted[idx];
+}
+
+// Grant tokens for elapsed time. Mutates and returns the meter.
+function refillChordMeter(meter, now) {
+  const elapsed = now - meter.lastRefill;
+  if (elapsed >= CHORD_BUCKET_REFILL_MS) {
+    const gained = Math.floor(elapsed / CHORD_BUCKET_REFILL_MS);
+    meter.tokens = Math.min(CHORD_BUCKET_MAX, meter.tokens + gained);
+    meter.lastRefill += gained * CHORD_BUCKET_REFILL_MS;
+  }
+  // Once full, keep the clock at now so a long quiet stretch cannot bank credit.
+  if (meter.tokens >= CHORD_BUCKET_MAX) meter.lastRefill = now;
+  return meter;
+}
+
+// Decide whether this onset earns a chord, spending a token when it does.
+function shouldSpawnChord(meter, magnitude, recentMagnitudes, now) {
+  refillChordMeter(meter, now);
+  if (magnitude < CHORD_MAGNITUDE_FLOOR) return false;
+  if (now - meter.lastChord < CHORD_MIN_GAP_MS) return false;
+  if (meter.tokens < 1) return false;
+  if (!recentMagnitudes || recentMagnitudes.length < CHORD_MIN_SAMPLES) return false;
+  const bar = magnitudeQuantile(recentMagnitudes, CHORD_PERCENTILE);
+  // Strictly greater, not >=. In a uniformly loud passage every onset EQUALS the quantile,
+  // so >= would let a wall of sound chord continuously - exactly the bug being fixed.
+  if (bar === null || magnitude <= bar) return false;
+  meter.tokens -= 1;
+  meter.lastChord = now;
+  return true;
+}
+
 // Combo threshold bonuses: at these streak counts, award a burst payout
 const COMBO_THRESHOLDS = [10, 25, 50, 100, 250, 500, 1000];
 
@@ -507,6 +566,15 @@ if (typeof module !== 'undefined') {
     BPM_OPTIONS,
     HYPERSPEED_OPTIONS,
     getScrollTimeMs,
+    createChordMeter,
+    refillChordMeter,
+    shouldSpawnChord,
+    magnitudeQuantile,
+    CHORD_BUCKET_MAX,
+    CHORD_BUCKET_REFILL_MS,
+    CHORD_MIN_GAP_MS,
+    CHORD_MAGNITUDE_FLOOR,
+    CHORD_MIN_SAMPLES,
     ACHIEVEMENTS,
     checkAchievements,
     getAchievementMultiplier,
@@ -547,6 +615,15 @@ if (typeof module !== 'undefined') {
     BPM_OPTIONS,
     HYPERSPEED_OPTIONS,
     getScrollTimeMs,
+    createChordMeter,
+    refillChordMeter,
+    shouldSpawnChord,
+    magnitudeQuantile,
+    CHORD_BUCKET_MAX,
+    CHORD_BUCKET_REFILL_MS,
+    CHORD_MIN_GAP_MS,
+    CHORD_MAGNITUDE_FLOOR,
+    CHORD_MIN_SAMPLES,
     ACHIEVEMENTS,
     checkAchievements,
     getAchievementMultiplier,
