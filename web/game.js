@@ -6,6 +6,10 @@ const KEY_TIERS = [
   { tier: 2, keys: ['s'], unlockCost: 50 },
   { tier: 3, keys: ['a', 'd'], unlockCost: 250 },
   { tier: 4, keys: ['q', 'e', 'z', 'c'], unlockCost: 2500 },
+  // Tier 5 is the center key. All eight compass directions are already spoken for, so the
+  // fifth tier adds a non-directional "center" note bound to Space (Numpad 0/2 as well),
+  // drawn as a diamond rather than a rotated arrow. Player-hit, not an auto lane.
+  { tier: 5, keys: ['x'], unlockCost: 25000 },
 ];
 
 const ALL_KEYS = KEY_TIERS.flatMap((t) => t.keys);
@@ -59,6 +63,26 @@ const BPM_OPTIONS = [
   { bpm: 300, label: '300 BPM', mult: 10.0, requiresUpgrade: 'tempo_master' },
 ];
 
+// --- Hyperspeed (note scroll speed) ---
+// Purely a readability setting: notes cover the same track in less time, so consecutive
+// beats land further apart and dense music stops bunching up at the hit line. Hit windows
+// are absolute ms and are deliberately NOT scaled here, so hyperspeed never changes
+// difficulty of timing or payout — only how much room the notes have to breathe.
+const HYPERSPEED_OPTIONS = [
+  { mult: 1, label: '1x' },
+  { mult: 2, label: '2x' },
+  { mult: 4, label: '4x' },
+  { mult: 8, label: '8x' },
+];
+
+// Travel time for a note at the given hyperspeed. Unknown/garbage values fall back to 1x
+// so a corrupt save can't yield a zero or negative travel time, which would divide by
+// zero in the renderer's progress calculation and strand notes on screen.
+function getScrollTimeMs(baseMs, hyperspeed) {
+  const opt = HYPERSPEED_OPTIONS.find((o) => o.mult === hyperspeed);
+  return baseMs / (opt ? opt.mult : 1);
+}
+
 // Combo threshold bonuses: at these streak counts, award a burst payout
 const COMBO_THRESHOLDS = [10, 25, 50, 100, 250, 500, 1000];
 
@@ -107,6 +131,10 @@ function createDefaultState() {
     },
     achievements: [],
     selectedBPM: 90,
+    // Note scroll speed multiplier. Top-level rather than inside `settings` on purpose:
+    // loadGame merges saves with a shallow Object.assign, so a nested field would be
+    // wiped out wholesale by any old save that already carries a `settings` object.
+    hyperspeed: 1,
     lastSaveTime: null,
   };
 }
@@ -116,7 +144,9 @@ function getKeyUpgradeCost(level) {
 }
 
 // Rare (non-WASD) keys are worth 3× more per hit (5× with Virtuoso)
-const KEY_VALUE_BONUS = { q: 3, e: 3, z: 3, c: 3 };
+// The center key pays above the tier-4 diagonals because the player actually has to hit
+// it, where the diagonals resolve themselves. 4 rather than 5 so virtuoso still upgrades it.
+const KEY_VALUE_BONUS = { q: 3, e: 3, z: 3, c: 3, x: 4 };
 
 function getKeyValue(state, key) {
   const keyState = state.keys[key];
@@ -475,6 +505,8 @@ if (typeof module !== 'undefined') {
     hasPrestigeUpgrade,
     buyPrestigeUpgrade,
     BPM_OPTIONS,
+    HYPERSPEED_OPTIONS,
+    getScrollTimeMs,
     ACHIEVEMENTS,
     checkAchievements,
     getAchievementMultiplier,
@@ -483,6 +515,8 @@ if (typeof module !== 'undefined') {
     ALL_KEYS,
     COMBO_THRESHOLDS,
     ACCURACY_MULTIPLIERS,
+    MANUAL_BONUS_MULTIPLIER,
+    DANCER_COMBO_MULT_CAP,
   };
 } else if (typeof window !== 'undefined') {
   Object.assign(window, {
@@ -511,6 +545,8 @@ if (typeof module !== 'undefined') {
     hasPrestigeUpgrade,
     buyPrestigeUpgrade,
     BPM_OPTIONS,
+    HYPERSPEED_OPTIONS,
+    getScrollTimeMs,
     ACHIEVEMENTS,
     checkAchievements,
     getAchievementMultiplier,
@@ -519,5 +555,7 @@ if (typeof module !== 'undefined') {
     ALL_KEYS,
     COMBO_THRESHOLDS,
     ACCURACY_MULTIPLIERS,
+    MANUAL_BONUS_MULTIPLIER,
+    DANCER_COMBO_MULT_CAP,
   });
 }

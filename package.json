@@ -4,7 +4,12 @@
   "description": "A rhythm-based incremental game synced to your music",
   "scripts": {
     "start": "python -m http.server 8080 -d web",
-    "dev": "python -m http.server 8080 -d web"
+    "dev": "python -m http.server 8080 -d web",
+    "test": "node --test",
+    "lint": "eslint web test build-single.js"
+  },
+  "devDependencies": {
+    "eslint": "^9.39.4"
   },
   "author": "",
   "license": "MIT"

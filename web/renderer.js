@@ -46,7 +46,9 @@ const GRACE_PERIOD_MS = 3000;
 let gameStartTime = 0;
 
 // Note track
-const SCROLL_TIME_MS = 2500;   // notes take 2.5s to scroll top → hit zone
+// Base travel time at 1x. The live value comes from getScrollTimeMs(), so raising
+// hyperspeed shortens travel and spreads consecutive beats further apart on screen.
+const BASE_SCROLL_TIME_MS = 2500;   // notes take 2.5s to scroll top → hit zone
 let HIT_PERFECT_MS = 80;     // ±80ms = perfect
 let HIT_GOOD_MS = 160;       // ±160ms = good
 let HIT_OK_MS = 280;         // ±280ms = ok
@@ -520,7 +522,7 @@ function spawnNote(now, excludeKey = null) {
 
   const key = weightedKey(unlocked);
   // Apply audio sync offset to where the note should LAND on the hit line
-  const hitTime = now + SCROLL_TIME_MS + audioOffsetMs;
+  const hitTime = now + getScrollTimeMs(BASE_SCROLL_TIME_MS, state.hyperspeed) + audioOffsetMs;
 
   const lane = lanesContainer.querySelector(`.lane[data-key="${key}"]`);
   if (!lane) return null;
@@ -1378,6 +1380,32 @@ function buildBPMSelector() {
   }
 }
 
+// Note-speed picker. Unlike the BPM buttons this stays available while listening, since
+// scroll speed is a readability preference and has nothing to do with the music's tempo.
+function buildHyperspeedSelector() {
+  const container = document.getElementById('hyperspeed-selector');
+  if (!container) return;
+  container.innerHTML = '';
+
+  for (const opt of HYPERSPEED_OPTIONS) {
+    const btn = document.createElement('button');
+    btn.className = 'hyperspeed-btn' + (state.hyperspeed === opt.mult ? ' active' : '');
+    btn.textContent = opt.label;
+    const travelMs = Math.round(getScrollTimeMs(BASE_SCROLL_TIME_MS, opt.mult));
+    btn.title = `Notes cross the track in ${travelMs}ms`;
+
+    btn.addEventListener('click', () => {
+      state.hyperspeed = opt.mult;
+      // Notes already in flight keep their original speed, because the game loop derives
+      // travel from each note's own spawnTime/hitTime rather than the current setting.
+      // The new speed eases in with the next spawn instead of yanking the screen.
+      buildHyperspeedSelector();
+      saveGame();
+    });
+    container.appendChild(btn);
+  }
+}
+
 // --- Export / Import ---
 function exportSave() {
   try {
@@ -1622,6 +1650,10 @@ function init() {
   if (!state.prestige.purchasedUpgrades) state.prestige.purchasedUpgrades = [];
   if (!state.achievements) state.achievements = [];
   if (!state.selectedBPM) state.selectedBPM = 90;
+  // Saves written before hyperspeed existed have no value here, and loadGame's shallow
+  // merge only back-fills absent keys, so an explicit guard keeps a 0/undefined out of
+  // the divisor in getScrollTimeMs.
+  if (!state.hyperspeed) state.hyperspeed = 1;
   syncDancerCooldowns();
   applyPrestigeEffects();
 
@@ -1649,6 +1681,7 @@ function init() {
   updateAccuracy();
   updateCombo();
   buildBPMSelector();
+  buildHyperspeedSelector();
   listenBtn.style.display = '';
 
   // Onboarding hint

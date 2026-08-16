@@ -859,6 +859,53 @@ body {
   margin-left: 2px;
 }
 
+/* --- Hyperspeed (note scroll speed) --- */
+#hyperspeed-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+
+#hyperspeed-label {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+#hyperspeed-selector {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+/* Same chip treatment as the BPM buttons so the two rows read as one control group. */
+.hyperspeed-btn {
+  padding: 3px 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 4px;
+  background: rgba(255,255,255,0.04);
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.hyperspeed-btn:hover {
+  background: rgba(124,92,252,0.15);
+  border-color: var(--accent);
+}
+
+.hyperspeed-btn.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+}
+
 /* --- Save Controls --- */
 #save-controls {
   display: flex;
