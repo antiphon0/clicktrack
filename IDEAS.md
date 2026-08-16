@@ -5,6 +5,30 @@ gameplay; it is a backlog, not a spec.
 
 ---
 
+## Combo-gated upgrading
+
+Rough, not worked out. Instead of treating "upgrade while playing" as a cost to
+be minimised, make it something the game actively rewards:
+
+- Reward upgrading while at a **high combo**, so shopping mid-song is a flex
+  rather than a risk.
+- Reward **maintaining** the combo through the upgrade, i.e. the skill is
+  buying without dropping the streak.
+- Possibly something on the notes themselves. Undefined so far.
+
+The appeal is that it inverts the current problem. Today the timing rules exist
+to stop Shift being abused; this would give a reason to *want* to press it at a
+specific moment, which is a carrot rather than a fence.
+
+Left deliberately vague. Do not invent the specifics without deciding what the
+reward actually is (payout multiplier, discount on the upgrade, a note effect).
+
+Related: the whiff/exploit tension in `onWhiff` is what makes a plain
+"free upgrade key" impossible, so any design here has to say what stops Shift
+from becoming a no-penalty play mode.
+
+---
+
 ## Improve — a star-power equivalent
 
 Guitar Hero's star power, adapted to Clicktrack.
