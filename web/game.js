@@ -490,7 +490,7 @@ const ACHIEVEMENTS = [
   { id: 'tier_5',        name: 'Full Band',         desc: 'Unlock all 5 tiers',          check: s => s.tierUnlocked >= 5 },
   // Dancers
   { id: 'dancer_1',      name: 'Backup Dancer',     desc: 'Hire your first dancer',      check: s => (s.dancers?.count ?? 0) >= 1 },
-  { id: 'dancer_5',      name: 'Dance Crew',        desc: 'Hire 5 dancers',              check: s => (s.dancers?.count ?? 0) >= 5 },
+  { id: 'dancer_5',      name: 'In-Sync',           desc: 'Hire 5 dancers',              check: s => (s.dancers?.count ?? 0) >= 5 },
   { id: 'dancer_10',     name: 'Flash Mob',         desc: 'Hire 10 dancers',             check: s => (s.dancers?.count ?? 0) >= 10 },
   // Prestige
   { id: 'prestige_1',    name: 'Fresh Start',       desc: 'Prestige for the first time', check: s => s.prestige.count >= 1 },
