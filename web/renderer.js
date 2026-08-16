@@ -1125,6 +1125,10 @@ function updatePrestigePanel() {
   prestigeGainEl.textContent = pending;
 
   prestigeBtn.disabled = pending <= 0;
+  // Derived from the constant rather than hardcoded in the markup, so the stated
+  // threshold cannot drift away from the one getPrestigeGain actually enforces.
+  prestigeHintEl.textContent =
+    `Earn ${formatNumber(PRESTIGE_EARNED_PER_STAR)} total beats to unlock prestige`;
   prestigeHintEl.style.display = pending > 0 ? 'none' : '';
 }
 

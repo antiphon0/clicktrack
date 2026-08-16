@@ -433,9 +433,16 @@ function upgradeDancers(state) {
 }
 
 // --- Prestige ---
+// Total beats earned per star, as the divisor under the square root. Was 1000, which put
+// the entire 136-star shop within reach of a single prestige at ~1.8e7 earned. Upgrade
+// costs grow at 1.15^level, so totalEarned blows past that inside one long session and
+// prestige was solved before it was ever used. At 1e5 the full shop lands around 1.8e9,
+// which is a long-game arc, while a first prestige near a million still pays 3 stars.
+const PRESTIGE_EARNED_PER_STAR = 100000;
+
 function getPrestigeGain(totalEarned, state) {
-  if (totalEarned < 1000) return 0;
-  let gain = Math.floor(Math.sqrt(totalEarned / 1000));
+  if (totalEarned < PRESTIGE_EARNED_PER_STAR) return 0;
+  let gain = Math.floor(Math.sqrt(totalEarned / PRESTIGE_EARNED_PER_STAR));
   if (state && hasPrestigeUpgrade(state, 'big_bang')) gain *= 2;
   return gain;
 }
@@ -590,6 +597,7 @@ if (typeof module !== 'undefined') {
     getPrestigeGain,
     performPrestige,
     PRESTIGE_UPGRADES,
+    PRESTIGE_EARNED_PER_STAR,
     hasPrestigeUpgrade,
     buyPrestigeUpgrade,
     BPM_OPTIONS,
@@ -640,6 +648,7 @@ if (typeof module !== 'undefined') {
     getPrestigeGain,
     performPrestige,
     PRESTIGE_UPGRADES,
+    PRESTIGE_EARNED_PER_STAR,
     hasPrestigeUpgrade,
     buyPrestigeUpgrade,
     BPM_OPTIONS,

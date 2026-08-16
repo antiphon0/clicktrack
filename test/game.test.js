@@ -22,6 +22,8 @@ const {
   getDancerHireCost,
   getPrestigeGain,
   performPrestige,
+  PRESTIGE_UPGRADES,
+  PRESTIGE_EARNED_PER_STAR,
   buyPrestigeUpgrade,
   hasPrestigeUpgrade,
   checkAchievements,
@@ -235,18 +237,29 @@ test('upgradeDancers caps at level 3', () => {
 
 // --- Prestige ---
 
-test('prestige gain is floor(sqrt(totalEarned/1000)), doubled by big_bang', () => {
-  assert.equal(getPrestigeGain(999), 0);
-  assert.equal(getPrestigeGain(1000), 1);
-  assert.equal(getPrestigeGain(9000), 3);
+test('prestige gain is floor(sqrt(totalEarned/PRESTIGE_EARNED_PER_STAR)), doubled by big_bang', () => {
+  const D = PRESTIGE_EARNED_PER_STAR;
+  assert.equal(getPrestigeGain(D - 1), 0);
+  assert.equal(getPrestigeGain(D), 1);
+  assert.equal(getPrestigeGain(9 * D), 3);
   const s = freshState();
   grantUpgrade(s, 'big_bang');
-  assert.equal(getPrestigeGain(9000, s), 6);
+  assert.equal(getPrestigeGain(9 * D, s), 6);
+});
+
+test('the Star Shop is not clearable in a single early prestige', () => {
+  const shopCost = PRESTIGE_UPGRADES.reduce((sum, u) => sum + u.cost, 0);
+  // Guards the bug this constant was raised to fix: at the old divisor of 1000 the whole
+  // shop was affordable at ~1.8e7 earned, which one long session blows past.
+  const affordAllAt = shopCost * shopCost * PRESTIGE_EARNED_PER_STAR;
+  assert.ok(affordAllAt > 1e9, `whole shop affordable at ${affordAllAt}, expected > 1e9`);
+  assert.equal(getPrestigeGain(1e7), Math.floor(Math.sqrt(1e7 / PRESTIGE_EARNED_PER_STAR)));
+  assert.ok(getPrestigeGain(1e7) < shopCost, '10M earned should not clear the shop');
 });
 
 test('performPrestige resets the run and awards stars', () => {
   const s = freshState();
-  s.totalEarned = 9000;
+  s.totalEarned = 9 * PRESTIGE_EARNED_PER_STAR; // 3 stars
   s.currency = 5000;
   s.tierUnlocked = 3;
   s.keys.w.level = 50;
@@ -264,7 +277,7 @@ test('performPrestige resets the run and awards stars', () => {
 
 test('warm_start and muscle_memory shape the post-prestige state', () => {
   const s = freshState();
-  s.totalEarned = 1000;
+  s.totalEarned = PRESTIGE_EARNED_PER_STAR; // 1 star, enough to prestige
   s.keys.w.level = 40;
   grantUpgrade(s, 'warm_start');
   grantUpgrade(s, 'muscle_memory');
