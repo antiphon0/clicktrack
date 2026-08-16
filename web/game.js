@@ -37,6 +37,32 @@ const MANUAL_BONUS_MULTIPLIER = 2;
 // Dancers' combo multiplier is capped to this until Dance Captain is purchased
 const DANCER_COMBO_MULT_CAP = 3;
 
+// The prestige multiplier is driven by LIFETIME stars, not unspent ones. Keying it to the
+// unspent balance made every purchase a permanent multiplier cut: at 196 stars you hold
+// 20.6x, and clearing the shop dropped you to 6x, so hoarding beat shopping and the shop
+// read as a trap. Decoupled, an upgrade costs only the stars themselves.
+function getPrestigeMultiplier(state) {
+  // Rounded to 2dp: 1 + 106*0.1 is 11.600000000000001 in binary floating point, and that
+  // noise would otherwise be written into saves and compound through earnings.
+  const raw = 1 + (state?.prestige?.starsEarned || 0) * 0.1;
+  return Math.round(raw * 100) / 100;
+}
+
+// Reconstructs starsEarned for saves written before it existed: whatever is unspent, plus
+// everything already sunk into the shop. Without this an existing player's multiplier
+// would collapse to 1x on load.
+function backfillStarsEarned(state) {
+  if (!state || !state.prestige) return state;
+  if (typeof state.prestige.starsEarned === 'number') return state;
+  const spent = (state.prestige.purchasedUpgrades || []).reduce((sum, id) => {
+    const upg = PRESTIGE_UPGRADES.find((u) => u.id === id);
+    return sum + (upg ? upg.cost : 0);
+  }, 0);
+  state.prestige.starsEarned = (state.prestige.stars || 0) + spent;
+  state.prestige.multiplier = getPrestigeMultiplier(state);
+  return state;
+}
+
 function hasPrestigeUpgrade(state, id) {
   return state.prestige.purchasedUpgrades.includes(id);
 }
@@ -48,7 +74,8 @@ function buyPrestigeUpgrade(state, id) {
   if (state.prestige.stars < upg.cost) return { state, success: false };
   state.prestige.stars -= upg.cost;
   state.prestige.purchasedUpgrades.push(id);
-  state.prestige.multiplier = 1 + state.prestige.stars * 0.1;
+  // Multiplier deliberately untouched: it tracks starsEarned, which spending never reduces.
+  state.prestige.multiplier = getPrestigeMultiplier(state);
   return { state, success: true };
 }
 
@@ -67,7 +94,7 @@ const BPM_OPTIONS = [
 // Purely a readability setting: notes cover the same track in less time, so consecutive
 // beats land further apart and dense music stops bunching up at the hit line. Hit windows
 // are absolute ms and are deliberately NOT scaled here, so hyperspeed never changes
-// difficulty of timing or payout — only how much room the notes have to breathe.
+// difficulty of timing or payout, only how much room the notes have to breathe.
 const HYPERSPEED_OPTIONS = [
   { mult: 1, label: '1x' },
   { mult: 2, label: '2x' },
@@ -182,7 +209,8 @@ function createDefaultState() {
     tierUnlocked: 1,
     prestige: {
       count: 0,
-      stars: 0,
+      stars: 0,          // unspent, the shop currency
+      starsEarned: 0,    // lifetime, drives the multiplier and is never spent down
       multiplier: 1,
       purchasedUpgrades: [],
     },
@@ -367,6 +395,18 @@ function upgradeKeyBulk(state, key, count) {
 }
 
 // Unlock the next tier of keys
+// How many levels a buy of `buyMode` ('1x'|'10x'|'100x'|'Max') would actually purchase
+// for `key` right now. Returns 0 when unaffordable, so callers can treat 0 as "no sale".
+// Pure so the keyboard shortcut and the on-screen buttons cannot drift apart.
+function resolveBuyCount(state, key, buyMode) {
+  const ks = state?.keys?.[key];
+  if (!ks || !ks.unlocked) return 0;
+  if (buyMode === 'Max') return getMaxAffordableUpgrades(state, key);
+  const n = parseInt(buyMode, 10);
+  if (!Number.isFinite(n) || n < 1) return 0;
+  return state.currency >= getBulkUpgradeCost(ks.level, n) ? n : 0;
+}
+
 function unlockTier(state) {
   const nextTier = state.tierUnlocked + 1;
   const tierDef = KEY_TIERS.find((t) => t.tier === nextTier);
@@ -421,9 +461,16 @@ function upgradeDancers(state) {
 }
 
 // --- Prestige ---
+// Total beats earned per star, as the divisor under the square root. Was 1000, which put
+// the entire 136-star shop within reach of a single prestige at ~1.8e7 earned. Upgrade
+// costs grow at 1.15^level, so totalEarned blows past that inside one long session and
+// prestige was solved before it was ever used. At 1e5 the full shop lands around 1.8e9,
+// which is a long-game arc, while a first prestige near a million still pays 3 stars.
+const PRESTIGE_EARNED_PER_STAR = 100000;
+
 function getPrestigeGain(totalEarned, state) {
-  if (totalEarned < 1000) return 0;
-  let gain = Math.floor(Math.sqrt(totalEarned / 1000));
+  if (totalEarned < PRESTIGE_EARNED_PER_STAR) return 0;
+  let gain = Math.floor(Math.sqrt(totalEarned / PRESTIGE_EARNED_PER_STAR));
   if (state && hasPrestigeUpgrade(state, 'big_bang')) gain *= 2;
   return gain;
 }
@@ -434,7 +481,8 @@ function performPrestige(state) {
 
   state.prestige.count++;
   state.prestige.stars += gain;
-  state.prestige.multiplier = 1 + state.prestige.stars * 0.1;
+  state.prestige.starsEarned = (state.prestige.starsEarned || 0) + gain;
+  state.prestige.multiplier = getPrestigeMultiplier(state);
 
   // Muscle Memory: keep 10% of key levels
   const keepLevels = hasPrestigeUpgrade(state, 'muscle_memory');
@@ -562,6 +610,7 @@ if (typeof module !== 'undefined') {
     upgradeKeyBulk,
     getBulkUpgradeCost,
     getMaxAffordableUpgrades,
+    resolveBuyCount,
     unlockTier,
     getKeyUpgradeCost,
     getKeyValue,
@@ -577,8 +626,11 @@ if (typeof module !== 'undefined') {
     getPrestigeGain,
     performPrestige,
     PRESTIGE_UPGRADES,
+    PRESTIGE_EARNED_PER_STAR,
     hasPrestigeUpgrade,
     buyPrestigeUpgrade,
+    getPrestigeMultiplier,
+    backfillStarsEarned,
     BPM_OPTIONS,
     HYPERSPEED_OPTIONS,
     getScrollTimeMs,
@@ -611,6 +663,7 @@ if (typeof module !== 'undefined') {
     upgradeKeyBulk,
     getBulkUpgradeCost,
     getMaxAffordableUpgrades,
+    resolveBuyCount,
     unlockTier,
     getKeyUpgradeCost,
     getKeyValue,
@@ -626,8 +679,11 @@ if (typeof module !== 'undefined') {
     getPrestigeGain,
     performPrestige,
     PRESTIGE_UPGRADES,
+    PRESTIGE_EARNED_PER_STAR,
     hasPrestigeUpgrade,
     buyPrestigeUpgrade,
+    getPrestigeMultiplier,
+    backfillStarsEarned,
     BPM_OPTIONS,
     HYPERSPEED_OPTIONS,
     getScrollTimeMs,

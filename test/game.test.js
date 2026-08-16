@@ -12,6 +12,7 @@ const {
   upgradeKeyBulk,
   getBulkUpgradeCost,
   getMaxAffordableUpgrades,
+  resolveBuyCount,
   unlockTier,
   getKeyUpgradeCost,
   getKeyValue,
@@ -21,6 +22,9 @@ const {
   getDancerHireCost,
   getPrestigeGain,
   performPrestige,
+  PRESTIGE_UPGRADES,
+  PRESTIGE_EARNED_PER_STAR,
+  backfillStarsEarned,
   buyPrestigeUpgrade,
   hasPrestigeUpgrade,
   checkAchievements,
@@ -234,18 +238,29 @@ test('upgradeDancers caps at level 3', () => {
 
 // --- Prestige ---
 
-test('prestige gain is floor(sqrt(totalEarned/1000)), doubled by big_bang', () => {
-  assert.equal(getPrestigeGain(999), 0);
-  assert.equal(getPrestigeGain(1000), 1);
-  assert.equal(getPrestigeGain(9000), 3);
+test('prestige gain is floor(sqrt(totalEarned/PRESTIGE_EARNED_PER_STAR)), doubled by big_bang', () => {
+  const D = PRESTIGE_EARNED_PER_STAR;
+  assert.equal(getPrestigeGain(D - 1), 0);
+  assert.equal(getPrestigeGain(D), 1);
+  assert.equal(getPrestigeGain(9 * D), 3);
   const s = freshState();
   grantUpgrade(s, 'big_bang');
-  assert.equal(getPrestigeGain(9000, s), 6);
+  assert.equal(getPrestigeGain(9 * D, s), 6);
+});
+
+test('the Star Shop is not clearable in a single early prestige', () => {
+  const shopCost = PRESTIGE_UPGRADES.reduce((sum, u) => sum + u.cost, 0);
+  // Guards the bug this constant was raised to fix: at the old divisor of 1000 the whole
+  // shop was affordable at ~1.8e7 earned, which one long session blows past.
+  const affordAllAt = shopCost * shopCost * PRESTIGE_EARNED_PER_STAR;
+  assert.ok(affordAllAt > 1e9, `whole shop affordable at ${affordAllAt}, expected > 1e9`);
+  assert.equal(getPrestigeGain(1e7), Math.floor(Math.sqrt(1e7 / PRESTIGE_EARNED_PER_STAR)));
+  assert.ok(getPrestigeGain(1e7) < shopCost, '10M earned should not clear the shop');
 });
 
 test('performPrestige resets the run and awards stars', () => {
   const s = freshState();
-  s.totalEarned = 9000;
+  s.totalEarned = 9 * PRESTIGE_EARNED_PER_STAR; // 3 stars
   s.currency = 5000;
   s.tierUnlocked = 3;
   s.keys.w.level = 50;
@@ -263,13 +278,61 @@ test('performPrestige resets the run and awards stars', () => {
 
 test('warm_start and muscle_memory shape the post-prestige state', () => {
   const s = freshState();
-  s.totalEarned = 1000;
+  s.totalEarned = PRESTIGE_EARNED_PER_STAR; // 1 star, enough to prestige
   s.keys.w.level = 40;
   grantUpgrade(s, 'warm_start');
   grantUpgrade(s, 'muscle_memory');
   performPrestige(s);
   assert.equal(s.currency, 100);
   assert.equal(s.keys.w.level, 4); // 10% of 40
+});
+
+test('buying an upgrade does NOT reduce the prestige multiplier', () => {
+  const s = freshState();
+  s.totalEarned = 400 * PRESTIGE_EARNED_PER_STAR; // 20 stars
+  performPrestige(s);
+  assert.equal(s.prestige.stars, 20);
+  assert.equal(s.prestige.starsEarned, 20);
+  const multBefore = s.prestige.multiplier;
+  assert.equal(multBefore, 3); // 1 + 20*0.1
+
+  buyPrestigeUpgrade(s, 'headliner'); // costs 10
+  assert.equal(s.prestige.stars, 10, 'stars are spent');
+  assert.equal(s.prestige.starsEarned, 20, 'lifetime stars are not');
+  assert.equal(s.prestige.multiplier, multBefore, 'multiplier survives the purchase');
+});
+
+test('starsEarned accumulates across prestiges while stars are spent down', () => {
+  const s = freshState();
+  s.totalEarned = 100 * PRESTIGE_EARNED_PER_STAR; // 10 stars
+  performPrestige(s);
+  buyPrestigeUpgrade(s, 'headliner'); // spends all 10
+  assert.equal(s.prestige.stars, 0);
+  s.totalEarned = 100 * PRESTIGE_EARNED_PER_STAR;
+  performPrestige(s);
+  assert.equal(s.prestige.stars, 10, 'balance is just the new gain');
+  assert.equal(s.prestige.starsEarned, 20, 'lifetime keeps both');
+  assert.equal(s.prestige.multiplier, 3);
+});
+
+test('backfillStarsEarned rebuilds lifetime stars for pre-existing saves', () => {
+  const s = freshState();
+  s.prestige.stars = 46;
+  s.prestige.purchasedUpgrades = ['headliner', 'big_bang']; // 10 + 50 spent
+  delete s.prestige.starsEarned;
+  backfillStarsEarned(s);
+  assert.equal(s.prestige.starsEarned, 106, 'unspent 46 plus 60 already sunk');
+  assert.equal(s.prestige.multiplier, 11.6);
+});
+
+test('backfillStarsEarned is idempotent and tolerates junk', () => {
+  const s = freshState();
+  s.prestige.stars = 5;
+  s.prestige.starsEarned = 99;
+  backfillStarsEarned(s);
+  assert.equal(s.prestige.starsEarned, 99, 'existing value is left alone');
+  assert.doesNotThrow(() => backfillStarsEarned(null));
+  assert.doesNotThrow(() => backfillStarsEarned({}));
 });
 
 test('buyPrestigeUpgrade spends stars and rejects rebuys', () => {
@@ -359,6 +422,38 @@ test('migrateSave tolerates garbage input', { skip: 'migrateSave not implemented
     assert.ok(s.keys.w);
     assert.equal(typeof s.currency, 'number');
   }
+});
+
+// --- Keyboard purchasing (Shift + lane key) ---
+
+test('resolveBuyCount matches what the on-screen buttons would buy', () => {
+  const s = freshState();
+  s.currency = 1000;
+  assert.equal(resolveBuyCount(s, 'w', '1x'), 1);
+  assert.equal(resolveBuyCount(s, 'w', '10x'), 10);
+  // Max agrees with the helper the buttons use
+  assert.equal(resolveBuyCount(s, 'w', 'Max'), getMaxAffordableUpgrades(s, 'w'));
+});
+
+test('resolveBuyCount returns 0 when unaffordable, so a keypress is a no-op', () => {
+  const s = freshState();
+  s.currency = 0;
+  assert.equal(resolveBuyCount(s, 'w', '1x'), 0);
+  assert.equal(resolveBuyCount(s, 'w', 'Max'), 0);
+  // Affordable for 1 but not 100
+  s.currency = getKeyUpgradeCost(s.keys.w.level);
+  assert.equal(resolveBuyCount(s, 'w', '1x'), 1);
+  assert.equal(resolveBuyCount(s, 'w', '100x'), 0);
+});
+
+test('resolveBuyCount refuses locked keys and garbage buy modes', () => {
+  const s = freshState();
+  s.currency = 1e9;
+  assert.equal(resolveBuyCount(s, 's', '1x'), 0, 'tier-2 key is locked at start');
+  assert.equal(resolveBuyCount(s, 'w', 'nonsense'), 0);
+  assert.equal(resolveBuyCount(s, 'w', '0x'), 0);
+  assert.equal(resolveBuyCount(s, 'nope', '1x'), 0);
+  assert.equal(resolveBuyCount(null, 'w', '1x'), 0);
 });
 
 // --- Chord gating (simultaneous notes) ---

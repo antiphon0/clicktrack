@@ -74,6 +74,25 @@ let PASSIVE_PER_BEAT = 0.1;
 const AUTO_KEYS = ['q', 'e', 'z', 'c'];
 const isAutoKey = (key) => AUTO_KEYS.includes(key);
 
+// --- Diagonal chording (two cardinals pressed together) ---
+// Arrow players reach the diagonals the way every other game does it: press the two
+// adjacent arrows. The previous implementation buffered EVERY cardinal press for 80ms
+// waiting for a partner, which put that latency on the core lanes permanently and is why
+// it was removed. This version buffers only when a diagonal note using that cardinal is
+// actually live on screen, so normal play has zero added latency and the wait exists only
+// in the narrow window where it can pay off.
+const CARDINALS = ['w', 'a', 's', 'd'];
+const CHORD_MAP = {
+  'a+w': 'q', 'w+a': 'q',  // left  + up   = up-left
+  'd+w': 'e', 'w+d': 'e',  // right + up   = up-right
+  'a+s': 'z', 's+a': 'z',  // left  + down = down-left
+  'd+s': 'c', 's+d': 'c',  // right + down = down-right
+};
+// Which two cardinals make each diagonal, used to decide whether buffering is worthwhile.
+const DIAGONAL_PARTS = { q: ['a', 'w'], e: ['d', 'w'], z: ['a', 's'], c: ['d', 's'] };
+const CHORD_WINDOW_MS = 55;
+let pendingCardinal = null; // { key, timerId, shiftHeld }
+
 // --- Input method detection ---
 const INPUT_HISTORY_SIZE = 5;
 let recentInputCodes = []; // raw e.code values
@@ -140,6 +159,7 @@ const laneLabels = $('#lane-labels');
 
 // Audio guide
 const audioGuideEl = $('#audio-guide');
+const audioGuideStepsEl = $('#audio-guide-steps');
 const audioGuideStatusEl = $('#audio-guide-status');
 const audioGuideCloseBtn = $('#audio-guide-close');
 const audioHelpBtn = $('#audio-help-btn');
@@ -198,8 +218,11 @@ function getPlayableKeys() {
 const LANE_ORDER = ['q', 'z', 'a', 's', 'w', 'd', 'e', 'c'];
 // 'x' is the tier-5 center key. Angle 0 because a diamond has no direction to point.
 const KEY_ANGLE = { w: 0, d: 90, s: 180, a: 270, e: 45, c: 135, z: 225, q: 315, x: 0 };
-const KEY_COLOR = { a: '#ff4455', w: '#44dd77', s: '#4499ff', d: '#ffdd33', q: '#cc44ff', e: '#ff8833', z: '#ff44cc', c: '#44ffcc', x: '#ffffff' };
-const KEY_GLOW  = { a: 'rgba(255,68,85,0.9)', w: 'rgba(68,221,119,0.9)', s: 'rgba(68,153,255,0.9)', d: 'rgba(255,221,51,0.9)', q: 'rgba(204,68,255,0.9)', e: 'rgba(255,136,51,0.9)', z: 'rgba(255,68,204,0.9)', c: 'rgba(68,255,204,0.9)', x: 'rgba(255,255,255,0.95)' };
+// x was #ffffff, which now disappears into the white note outline. #aaddff also matches
+// the --key-color already declared for .note-key-x in styles.css, which it had drifted from.
+const KEY_COLOR = { a: '#ff4455', w: '#44dd77', s: '#4499ff', d: '#ffdd33', q: '#cc44ff', e: '#ff8833', z: '#ff44cc', c: '#44ffcc', x: '#aaddff' };
+// KEY_GLOW removed with the note drop-shadow. The --key-glow CSS variables still exist
+// and drive the lane-label hit flash, which is a deliberate momentary pop, not scroll blur.
 // DDR-style arrow: wide head, narrow stem, clean proportions
 const ARROW_SHAPE = 'M 50,4 L 92,46 L 66,46 L 66,96 L 34,96 L 34,46 L 8,46 Z';
 // Center key (tier 5) is a diamond, so it reads as "no direction, just hit it" and stays
@@ -210,7 +233,6 @@ const KEY_SHAPE = { x: CENTER_SHAPE };
 function createArrowEl(key, isTarget) {
   const angle = KEY_ANGLE[key] ?? 0;
   const color = KEY_COLOR[key] || '#ffffff';
-  const glow  = KEY_GLOW[key]  || 'rgba(255,255,255,0.5)';
   const shape = KEY_SHAPE[key] || ARROW_SHAPE;
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 100 100');
@@ -229,13 +251,15 @@ function createArrowEl(key, isTarget) {
     outline.setAttribute('stroke-linejoin', 'round');
     g.appendChild(outline);
   } else {
-    // Solid filled arrow for scrolling notes
-    svg.style.filter = `drop-shadow(0 0 6px ${glow})`;
+    // Solid filled arrow for scrolling notes. Deliberately no drop-shadow: the glow
+    // smeared the edges, and at higher note speeds a fast-moving halo reads as motion
+    // blur and makes the arrow hard to track. A hard white outline does the opposite,
+    // sharpening the silhouette against the dark track without adding any blur.
     const fill = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     fill.setAttribute('d', shape);
     fill.setAttribute('fill', color);
-    fill.setAttribute('stroke', '#111122');
-    fill.setAttribute('stroke-width', '3');
+    fill.setAttribute('stroke', '#ffffff');
+    fill.setAttribute('stroke-width', '3.5');
     fill.setAttribute('stroke-linejoin', 'round');
     g.appendChild(fill);
   }
@@ -270,11 +294,35 @@ function rebuildLanes() {
     label.appendChild(labelArrow);
     laneLabels.appendChild(label);
   }
+
+  maybeShowAutoLaneHint();
+}
+
+// One-time reassurance the first time the dim lanes appear. Four extra lanes arriving at
+// once reads as "four more things I must hit"; they are optional, so say so before the
+// player panics. Fires from rebuildLanes so it covers the tier unlock however it was
+// bought (button or Shift + center key) and a reload that already has them.
+function maybeShowAutoLaneHint() {
+  if (localStorage.getItem('clicktrack_auto_lane_hint_done') === '1') return;
+  if (!getUnlockedKeys().some(isAutoKey)) return;
+
+  const noteTrack = document.getElementById('note-track');
+  if (!noteTrack || document.getElementById('auto-lane-hint')) return;
+
+  const hint = document.createElement('div');
+  hint.id = 'auto-lane-hint';
+  hint.className = 'auto-lane-hint';
+  hint.textContent = "Don't worry about the dim lanes. They score themselves, and you can hit them for extra if you like.";
+  noteTrack.appendChild(hint);
+  localStorage.setItem('clicktrack_auto_lane_hint_done', '1');
+  setTimeout(() => { if (hint.parentNode) hint.remove(); }, 9000);
 }
 
 // --- Audio Setup Guide ---
 function showAudioGuide() {
   audioGuideEl.style.display = '';
+  // Restore the checklist; a previous successful connect collapses it.
+  if (audioGuideStepsEl) audioGuideStepsEl.style.display = '';
   setGuideStep(1);
   setGuideStatus('', '');
 }
@@ -410,17 +458,20 @@ async function startCapture() {
 
     // Guide success
     if (audioGuideEl.style.display !== 'none') {
-      setGuideStep(6); // all done
+      // Collapse the checklist rather than ticking every step. Marking all five "done" lit
+      // up a column of green check-marked cards that reads as a pile of achievement
+      // unlocks and shoves the note track down the page. One confirmation line is enough.
+      if (audioGuideStepsEl) audioGuideStepsEl.style.display = 'none';
       if (usedDisplayMedia) {
         setGuideStatus('Audio connected! Notes will now sync to the beat of your music.', 'ok');
       } else {
         setGuideStatus('Connected via microphone. For best results, try tab sharing next time.', 'ok');
       }
       markAudioGuideDone();
-      // Auto-close guide after 3 seconds on success
+      // Auto-close the guide shortly after success
       setTimeout(() => {
         if (isListening) hideAudioGuide();
-      }, 3000);
+      }, 2500);
     }
 
     if (!animFrameId) gameLoop();
@@ -594,13 +645,16 @@ function gameLoop() {
 
     const topPercent = progress * 100;
     note.element.style.top = topPercent + '%';
-    note.element.style.opacity = Math.min(1, progress * 2);
+    // No fade-in. It ramped opacity over the first half of a note's travel, which at
+    // higher note speeds is most of the time the note exists, so the player spent the
+    // lead time reading a ghost. That cancelled out the point of raising note speed.
 
     const pastHitMs = now - note.hitTime;
 
-    // Auto-hit lanes (diagonals): the game resolves them the moment they reach the hit line.
-    // Never wait for the player or a dancer — these are ambient bonus income.
-    if (isAutoKey(note.key) && pastHitMs >= 0) {
+    // Diagonals resolve themselves only AFTER the player's full window has passed, exactly
+    // like the dancer fallback below. Resolving at pastHitMs >= 0 stole the note on the
+    // beat, leaving only the early half hittable, which is why playing them felt dead.
+    if (isAutoKey(note.key) && pastHitMs > HIT_OK_MS) {
       autoLaneHit(note);
       activeNotes.splice(i, 1);
       continue;
@@ -671,8 +725,63 @@ function flashLane(key) {
   }
 }
 
+// Resolve one press: play the note, and if Shift was held, buy that lane's upgrade too.
+function firePress(key, shiftHeld) {
+  onKeyPress(key);
+  if (shiftHeld) buyFromKeyboard(key);
+}
+
+// Is a diagonal note that uses this cardinal currently within reach? Only then is it worth
+// delaying the press to see whether a partner arrow follows.
+function isDiagonalLiveFor(cardinal) {
+  const now = performance.now();
+  for (const note of activeNotes) {
+    if (note.hit || !isAutoKey(note.key)) continue;
+    if (!state.keys[note.key]?.unlocked) continue;
+    if (Math.abs(now - note.hitTime) > MISS_THRESHOLD_MS) continue;
+    if (DIAGONAL_PARTS[note.key]?.includes(cardinal)) return true;
+  }
+  return false;
+}
+
+// Flush a buffered cardinal as an ordinary press.
+function flushPendingCardinal() {
+  if (!pendingCardinal) return;
+  const p = pendingCardinal;
+  pendingCardinal = null;
+  clearTimeout(p.timerId);
+  firePress(p.key, p.shiftHeld);
+}
+
+function handleCardinalPress(key, shiftHeld) {
+  // A partner arrived in time: resolve the pair as the diagonal instead of two cardinals.
+  if (pendingCardinal && pendingCardinal.key !== key) {
+    const diagonal = CHORD_MAP[pendingCardinal.key + '+' + key];
+    if (diagonal && state.keys[diagonal]?.unlocked) {
+      const shift = pendingCardinal.shiftHeld || shiftHeld;
+      clearTimeout(pendingCardinal.timerId);
+      pendingCardinal = null;
+      firePress(diagonal, shift);
+      return;
+    }
+  }
+
+  // Nothing diagonal is live in this lane pairing, so there is nothing to wait for.
+  if (!isDiagonalLiveFor(key)) {
+    flushPendingCardinal();
+    firePress(key, shiftHeld);
+    return;
+  }
+
+  // Hold this press just long enough for a partner arrow to land.
+  flushPendingCardinal();
+  const timerId = setTimeout(() => {
+    if (pendingCardinal && pendingCardinal.key === key) flushPendingCardinal();
+  }, CHORD_WINDOW_MS);
+  pendingCardinal = { key, timerId, shiftHeld };
+}
+
 function onKeyPress(key) {
-  if (isAutoKey(key)) return; // diagonals are auto-hit, never player-played
   if (!state.keys[key]?.unlocked) return;
 
   flashLane(key);
@@ -814,8 +923,9 @@ function autoDancerHit(note) {
 // Auto-hit lane (diagonal) resolves itself at the hit line. Flat, modest "ambient" income:
 // routed through the dancer source (no manual 2x, capped combo) at a fixed ×1 combo and "ok"
 // accuracy, so the rare-key value bonus still pays out but skill on the cardinals stays the
-// real earner. Kept quiet — no tap feedback, no streak — so it reads as background income
+// real earner. Kept quiet (no tap feedback, no streak) so it reads as background income
 // rather than a hit the player should have reacted to.
+
 function autoLaneHit(note) {
   note.hit = true;
   note.element.classList.add('note-hit');
@@ -1044,6 +1154,10 @@ function updatePrestigePanel() {
   prestigeGainEl.textContent = pending;
 
   prestigeBtn.disabled = pending <= 0;
+  // Derived from the constant rather than hardcoded in the markup, so the stated
+  // threshold cannot drift away from the one getPrestigeGain actually enforces.
+  prestigeHintEl.textContent =
+    `Earn ${formatNumber(PRESTIGE_EARNED_PER_STAR)} total beats to unlock prestige`;
   prestigeHintEl.style.display = pending > 0 ? 'none' : '';
 }
 
@@ -1064,6 +1178,19 @@ function updateAchievementsPanel() {
     </div>`;
   }
   achievementListEl.innerHTML = html;
+}
+
+// Small, quiet confirmation for keyboard purchases. Only one is ever on screen: a rapid
+// series of upgrades should not stack a column of toasts.
+let purchaseToastEl = null;
+function showToast(msg) {
+  if (purchaseToastEl && purchaseToastEl.parentNode) purchaseToastEl.remove();
+  const el = document.createElement('div');
+  el.className = 'purchase-toast';
+  el.textContent = msg;
+  document.body.appendChild(el);
+  purchaseToastEl = el;
+  setTimeout(() => { if (el.parentNode) el.remove(); }, 1100);
 }
 
 function showAchievementToast(ach) {
@@ -1108,6 +1235,41 @@ function showFeedback(type, earned) {
   }, 600);
 }
 
+// Keyboard purchasing. Each lane buys its own upgrade at the current buy mode, so the
+// mapping needs no lookup table and is identical on WASD, arrows and numpad (all three
+// resolve to the same internal key). The center key buys the tier unlock instead, and is
+// deliberately NOT gated on the center lane being unlocked, since tier 5 unlocks it
+// so requiring it first would be circular.
+function buyFromKeyboard(key) {
+  if (key === 'x') {
+    const before = state.tierUnlocked;
+    unlockTier(state);
+    if (state.tierUnlocked !== before) {
+      rebuildLanes();
+      afterKeyboardPurchase(`Tier ${state.tierUnlocked} unlocked`);
+    }
+    return;
+  }
+
+  const count = resolveBuyCount(state, key, buyMode);
+  if (count < 1) return; // unaffordable or locked: stay silent, the note still counted
+  const { bought } = upgradeKeyBulk(state, key, count);
+  if (bought > 0) {
+    afterKeyboardPurchase(`${getKeyDisplayName(key)} +${bought}`);
+  }
+}
+
+// Shared refresh after a keyboard purchase. Skips showFeedback so it cannot stomp the
+// hit rating for the same press, which the player still needs to read.
+function afterKeyboardPurchase(msg) {
+  updateCurrency();
+  updateUpgrades();
+  updateStats();
+  runAchievementCheck();
+  saveGame();
+  showToast(msg);
+}
+
 // --- Events ---
 listenBtn.addEventListener('click', startCapture);
 stopBtn.addEventListener('click', stopListening);
@@ -1146,15 +1308,20 @@ document.addEventListener('keydown', (e) => {
     if (recentInputCodes.length > INPUT_HISTORY_SIZE) recentInputCodes.shift();
     detectInputMethod();
 
-    // Diagonals are auto-hit by the game, not the player — ignore any press on them.
-    if (isAutoKey(key)) return;
+    // Cardinals may combine into a diagonal, so they route through the chord handler.
+    // Everything else (diagonals pressed directly, the centre key) fires immediately.
+    if (CARDINALS.includes(key)) {
+      handleCardinalPress(key, e.shiftKey);
+      return;
+    }
 
-    onKeyPress(key);
+    firePress(key, e.shiftKey);
   }
 });
 
-document.addEventListener('keyup', (e) => {
-  // no-op, chord detection uses buffering not held-key tracking
+document.addEventListener('keyup', () => {
+  // Improve hooks in here: on Shift release, if no lane key was pressed during the hold,
+  // that was a bare tap and should activate Improve rather than buy anything.
 });
 
 unlockTierBtn.addEventListener('click', () => {
@@ -1240,12 +1407,19 @@ function loadGame() {
     if (saved) {
       const parsed = JSON.parse(saved);
       const defaults = createDefaultState();
+      // A pristine second copy is required, not paranoia: Object.assign MUTATES its
+      // target, so after the merge `defaults` is the same object as `state` and
+      // defaults.keys has already been replaced by the save's keys. Back-filling from it
+      // would assign values to themselves, leaving keys the save predates (the tier-5
+      // center key, for anything saved before it existed) as undefined. unlockTier then
+      // throws on state.keys[key].unlocked for that key.
+      const pristine = createDefaultState();
       // Merge top-level fields so new/missing keys always have defaults
       state = Object.assign(defaults, parsed);
       // Ensure every expected key has a valid entry
       for (const key of ALL_KEYS) {
         if (!state.keys[key] || typeof state.keys[key].unlocked !== 'boolean') {
-          state.keys[key] = defaults.keys[key];
+          state.keys[key] = pristine.keys[key];
         }
       }
     }
@@ -1649,9 +1823,13 @@ function init() {
   loadGame();
   if (!state.dancers) state.dancers = { count: 0, level: 1 };
   if (!state.stats) state.stats = { totalTaps: 0, totalMisses: 0, bestCombo: 0 };
-  if (!state.prestige) state.prestige = { count: 0, stars: 0, multiplier: 1, purchasedUpgrades: [] };
+  if (!state.prestige) state.prestige = { count: 0, stars: 0, starsEarned: 0, multiplier: 1, purchasedUpgrades: [] };
   if (state.prestige.stars === undefined) state.prestige.stars = 0;
   if (!state.prestige.purchasedUpgrades) state.prestige.purchasedUpgrades = [];
+  // Must run after purchasedUpgrades exists: it reconstructs lifetime stars from the
+  // unspent balance plus everything already sunk into the shop. Without it, a save from
+  // before starsEarned existed would load with a 1x multiplier.
+  backfillStarsEarned(state);
   if (!state.achievements) state.achievements = [];
   if (!state.selectedBPM) state.selectedBPM = 90;
   // Saves written before hyperspeed existed have no value here, and loadGame's shallow
