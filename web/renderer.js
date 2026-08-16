@@ -74,6 +74,25 @@ let PASSIVE_PER_BEAT = 0.1;
 const AUTO_KEYS = ['q', 'e', 'z', 'c'];
 const isAutoKey = (key) => AUTO_KEYS.includes(key);
 
+// --- Diagonal chording (two cardinals pressed together) ---
+// Arrow players reach the diagonals the way every other game does it: press the two
+// adjacent arrows. The previous implementation buffered EVERY cardinal press for 80ms
+// waiting for a partner, which put that latency on the core lanes permanently and is why
+// it was removed. This version buffers only when a diagonal note using that cardinal is
+// actually live on screen, so normal play has zero added latency and the wait exists only
+// in the narrow window where it can pay off.
+const CARDINALS = ['w', 'a', 's', 'd'];
+const CHORD_MAP = {
+  'a+w': 'q', 'w+a': 'q',  // left  + up   = up-left
+  'd+w': 'e', 'w+d': 'e',  // right + up   = up-right
+  'a+s': 'z', 's+a': 'z',  // left  + down = down-left
+  'd+s': 'c', 's+d': 'c',  // right + down = down-right
+};
+// Which two cardinals make each diagonal, used to decide whether buffering is worthwhile.
+const DIAGONAL_PARTS = { q: ['a', 'w'], e: ['d', 'w'], z: ['a', 's'], c: ['d', 's'] };
+const CHORD_WINDOW_MS = 55;
+let pendingCardinal = null; // { key, timerId, shiftHeld }
+
 // --- Input method detection ---
 const INPUT_HISTORY_SIZE = 5;
 let recentInputCodes = []; // raw e.code values
@@ -706,6 +725,62 @@ function flashLane(key) {
   }
 }
 
+// Resolve one press: play the note, and if Shift was held, buy that lane's upgrade too.
+function firePress(key, shiftHeld) {
+  onKeyPress(key);
+  if (shiftHeld) buyFromKeyboard(key);
+}
+
+// Is a diagonal note that uses this cardinal currently within reach? Only then is it worth
+// delaying the press to see whether a partner arrow follows.
+function isDiagonalLiveFor(cardinal) {
+  const now = performance.now();
+  for (const note of activeNotes) {
+    if (note.hit || !isAutoKey(note.key)) continue;
+    if (!state.keys[note.key]?.unlocked) continue;
+    if (Math.abs(now - note.hitTime) > MISS_THRESHOLD_MS) continue;
+    if (DIAGONAL_PARTS[note.key]?.includes(cardinal)) return true;
+  }
+  return false;
+}
+
+// Flush a buffered cardinal as an ordinary press.
+function flushPendingCardinal() {
+  if (!pendingCardinal) return;
+  const p = pendingCardinal;
+  pendingCardinal = null;
+  clearTimeout(p.timerId);
+  firePress(p.key, p.shiftHeld);
+}
+
+function handleCardinalPress(key, shiftHeld) {
+  // A partner arrived in time: resolve the pair as the diagonal instead of two cardinals.
+  if (pendingCardinal && pendingCardinal.key !== key) {
+    const diagonal = CHORD_MAP[pendingCardinal.key + '+' + key];
+    if (diagonal && state.keys[diagonal]?.unlocked) {
+      const shift = pendingCardinal.shiftHeld || shiftHeld;
+      clearTimeout(pendingCardinal.timerId);
+      pendingCardinal = null;
+      firePress(diagonal, shift);
+      return;
+    }
+  }
+
+  // Nothing diagonal is live in this lane pairing, so there is nothing to wait for.
+  if (!isDiagonalLiveFor(key)) {
+    flushPendingCardinal();
+    firePress(key, shiftHeld);
+    return;
+  }
+
+  // Hold this press just long enough for a partner arrow to land.
+  flushPendingCardinal();
+  const timerId = setTimeout(() => {
+    if (pendingCardinal && pendingCardinal.key === key) flushPendingCardinal();
+  }, CHORD_WINDOW_MS);
+  pendingCardinal = { key, timerId, shiftHeld };
+}
+
 function onKeyPress(key) {
   if (!state.keys[key]?.unlocked) return;
 
@@ -1233,20 +1308,14 @@ document.addEventListener('keydown', (e) => {
     if (recentInputCodes.length > INPUT_HISTORY_SIZE) recentInputCodes.shift();
     detectInputMethod();
 
-    // Diagonals are no longer special-cased on input. They are ordinary notes that happen
-    // to forgive being ignored: hit one and it scores and builds combo like any other,
-    // leave it and it resolves itself for ambient income with no combo penalty.
-
-    // Shift + lane key buys that lane's upgrade WITHOUT skipping the note, so progression
-    // never costs you a combo. When Improve is built, this branch is also where the Shift
-    // press gets marked "consumed", so a bare Shift tap can mean activation instead.
-    if (e.shiftKey) {
-      onKeyPress(key);
-      buyFromKeyboard(key);
+    // Cardinals may combine into a diagonal, so they route through the chord handler.
+    // Everything else (diagonals pressed directly, the centre key) fires immediately.
+    if (CARDINALS.includes(key)) {
+      handleCardinalPress(key, e.shiftKey);
       return;
     }
 
-    onKeyPress(key);
+    firePress(key, e.shiftKey);
   }
 });
 
