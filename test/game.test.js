@@ -24,6 +24,7 @@ const {
   performPrestige,
   PRESTIGE_UPGRADES,
   PRESTIGE_EARNED_PER_STAR,
+  backfillStarsEarned,
   buyPrestigeUpgrade,
   hasPrestigeUpgrade,
   checkAchievements,
@@ -284,6 +285,54 @@ test('warm_start and muscle_memory shape the post-prestige state', () => {
   performPrestige(s);
   assert.equal(s.currency, 100);
   assert.equal(s.keys.w.level, 4); // 10% of 40
+});
+
+test('buying an upgrade does NOT reduce the prestige multiplier', () => {
+  const s = freshState();
+  s.totalEarned = 400 * PRESTIGE_EARNED_PER_STAR; // 20 stars
+  performPrestige(s);
+  assert.equal(s.prestige.stars, 20);
+  assert.equal(s.prestige.starsEarned, 20);
+  const multBefore = s.prestige.multiplier;
+  assert.equal(multBefore, 3); // 1 + 20*0.1
+
+  buyPrestigeUpgrade(s, 'headliner'); // costs 10
+  assert.equal(s.prestige.stars, 10, 'stars are spent');
+  assert.equal(s.prestige.starsEarned, 20, 'lifetime stars are not');
+  assert.equal(s.prestige.multiplier, multBefore, 'multiplier survives the purchase');
+});
+
+test('starsEarned accumulates across prestiges while stars are spent down', () => {
+  const s = freshState();
+  s.totalEarned = 100 * PRESTIGE_EARNED_PER_STAR; // 10 stars
+  performPrestige(s);
+  buyPrestigeUpgrade(s, 'headliner'); // spends all 10
+  assert.equal(s.prestige.stars, 0);
+  s.totalEarned = 100 * PRESTIGE_EARNED_PER_STAR;
+  performPrestige(s);
+  assert.equal(s.prestige.stars, 10, 'balance is just the new gain');
+  assert.equal(s.prestige.starsEarned, 20, 'lifetime keeps both');
+  assert.equal(s.prestige.multiplier, 3);
+});
+
+test('backfillStarsEarned rebuilds lifetime stars for pre-existing saves', () => {
+  const s = freshState();
+  s.prestige.stars = 46;
+  s.prestige.purchasedUpgrades = ['headliner', 'big_bang']; // 10 + 50 spent
+  delete s.prestige.starsEarned;
+  backfillStarsEarned(s);
+  assert.equal(s.prestige.starsEarned, 106, 'unspent 46 plus 60 already sunk');
+  assert.equal(s.prestige.multiplier, 11.6);
+});
+
+test('backfillStarsEarned is idempotent and tolerates junk', () => {
+  const s = freshState();
+  s.prestige.stars = 5;
+  s.prestige.starsEarned = 99;
+  backfillStarsEarned(s);
+  assert.equal(s.prestige.starsEarned, 99, 'existing value is left alone');
+  assert.doesNotThrow(() => backfillStarsEarned(null));
+  assert.doesNotThrow(() => backfillStarsEarned({}));
 });
 
 test('buyPrestigeUpgrade spends stars and rejects rebuys', () => {

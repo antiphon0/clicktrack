@@ -1800,9 +1800,13 @@ function init() {
   loadGame();
   if (!state.dancers) state.dancers = { count: 0, level: 1 };
   if (!state.stats) state.stats = { totalTaps: 0, totalMisses: 0, bestCombo: 0 };
-  if (!state.prestige) state.prestige = { count: 0, stars: 0, multiplier: 1, purchasedUpgrades: [] };
+  if (!state.prestige) state.prestige = { count: 0, stars: 0, starsEarned: 0, multiplier: 1, purchasedUpgrades: [] };
   if (state.prestige.stars === undefined) state.prestige.stars = 0;
   if (!state.prestige.purchasedUpgrades) state.prestige.purchasedUpgrades = [];
+  // Must run after purchasedUpgrades exists: it reconstructs lifetime stars from the
+  // unspent balance plus everything already sunk into the shop. Without it, a save from
+  // before starsEarned existed would load with a 1x multiplier.
+  backfillStarsEarned(state);
   if (!state.achievements) state.achievements = [];
   if (!state.selectedBPM) state.selectedBPM = 90;
   // Saves written before hyperspeed existed have no value here, and loadGame's shallow

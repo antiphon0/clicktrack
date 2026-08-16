@@ -37,6 +37,32 @@ const MANUAL_BONUS_MULTIPLIER = 2;
 // Dancers' combo multiplier is capped to this until Dance Captain is purchased
 const DANCER_COMBO_MULT_CAP = 3;
 
+// The prestige multiplier is driven by LIFETIME stars, not unspent ones. Keying it to the
+// unspent balance made every purchase a permanent multiplier cut: at 196 stars you hold
+// 20.6x, and clearing the shop dropped you to 6x, so hoarding beat shopping and the shop
+// read as a trap. Decoupled, an upgrade costs only the stars themselves.
+function getPrestigeMultiplier(state) {
+  // Rounded to 2dp: 1 + 106*0.1 is 11.600000000000001 in binary floating point, and that
+  // noise would otherwise be written into saves and compound through earnings.
+  const raw = 1 + (state?.prestige?.starsEarned || 0) * 0.1;
+  return Math.round(raw * 100) / 100;
+}
+
+// Reconstructs starsEarned for saves written before it existed: whatever is unspent, plus
+// everything already sunk into the shop. Without this an existing player's multiplier
+// would collapse to 1x on load.
+function backfillStarsEarned(state) {
+  if (!state || !state.prestige) return state;
+  if (typeof state.prestige.starsEarned === 'number') return state;
+  const spent = (state.prestige.purchasedUpgrades || []).reduce((sum, id) => {
+    const upg = PRESTIGE_UPGRADES.find((u) => u.id === id);
+    return sum + (upg ? upg.cost : 0);
+  }, 0);
+  state.prestige.starsEarned = (state.prestige.stars || 0) + spent;
+  state.prestige.multiplier = getPrestigeMultiplier(state);
+  return state;
+}
+
 function hasPrestigeUpgrade(state, id) {
   return state.prestige.purchasedUpgrades.includes(id);
 }
@@ -48,7 +74,8 @@ function buyPrestigeUpgrade(state, id) {
   if (state.prestige.stars < upg.cost) return { state, success: false };
   state.prestige.stars -= upg.cost;
   state.prestige.purchasedUpgrades.push(id);
-  state.prestige.multiplier = 1 + state.prestige.stars * 0.1;
+  // Multiplier deliberately untouched: it tracks starsEarned, which spending never reduces.
+  state.prestige.multiplier = getPrestigeMultiplier(state);
   return { state, success: true };
 }
 
@@ -182,7 +209,8 @@ function createDefaultState() {
     tierUnlocked: 1,
     prestige: {
       count: 0,
-      stars: 0,
+      stars: 0,          // unspent, the shop currency
+      starsEarned: 0,    // lifetime, drives the multiplier and is never spent down
       multiplier: 1,
       purchasedUpgrades: [],
     },
@@ -453,7 +481,8 @@ function performPrestige(state) {
 
   state.prestige.count++;
   state.prestige.stars += gain;
-  state.prestige.multiplier = 1 + state.prestige.stars * 0.1;
+  state.prestige.starsEarned = (state.prestige.starsEarned || 0) + gain;
+  state.prestige.multiplier = getPrestigeMultiplier(state);
 
   // Muscle Memory: keep 10% of key levels
   const keepLevels = hasPrestigeUpgrade(state, 'muscle_memory');
@@ -600,6 +629,8 @@ if (typeof module !== 'undefined') {
     PRESTIGE_EARNED_PER_STAR,
     hasPrestigeUpgrade,
     buyPrestigeUpgrade,
+    getPrestigeMultiplier,
+    backfillStarsEarned,
     BPM_OPTIONS,
     HYPERSPEED_OPTIONS,
     getScrollTimeMs,
@@ -651,6 +682,8 @@ if (typeof module !== 'undefined') {
     PRESTIGE_EARNED_PER_STAR,
     hasPrestigeUpgrade,
     buyPrestigeUpgrade,
+    getPrestigeMultiplier,
+    backfillStarsEarned,
     BPM_OPTIONS,
     HYPERSPEED_OPTIONS,
     getScrollTimeMs,
