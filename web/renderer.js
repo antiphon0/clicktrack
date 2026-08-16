@@ -200,7 +200,8 @@ const LANE_ORDER = ['q', 'z', 'a', 's', 'w', 'd', 'e', 'c'];
 // 'x' is the tier-5 center key. Angle 0 because a diamond has no direction to point.
 const KEY_ANGLE = { w: 0, d: 90, s: 180, a: 270, e: 45, c: 135, z: 225, q: 315, x: 0 };
 const KEY_COLOR = { a: '#ff4455', w: '#44dd77', s: '#4499ff', d: '#ffdd33', q: '#cc44ff', e: '#ff8833', z: '#ff44cc', c: '#44ffcc', x: '#ffffff' };
-const KEY_GLOW  = { a: 'rgba(255,68,85,0.9)', w: 'rgba(68,221,119,0.9)', s: 'rgba(68,153,255,0.9)', d: 'rgba(255,221,51,0.9)', q: 'rgba(204,68,255,0.9)', e: 'rgba(255,136,51,0.9)', z: 'rgba(255,68,204,0.9)', c: 'rgba(68,255,204,0.9)', x: 'rgba(255,255,255,0.95)' };
+// KEY_GLOW removed with the note drop-shadow. The --key-glow CSS variables still exist
+// and drive the lane-label hit flash, which is a deliberate momentary pop, not scroll blur.
 // DDR-style arrow: wide head, narrow stem, clean proportions
 const ARROW_SHAPE = 'M 50,4 L 92,46 L 66,46 L 66,96 L 34,96 L 34,46 L 8,46 Z';
 // Center key (tier 5) is a diamond, so it reads as "no direction, just hit it" and stays
@@ -211,7 +212,6 @@ const KEY_SHAPE = { x: CENTER_SHAPE };
 function createArrowEl(key, isTarget) {
   const angle = KEY_ANGLE[key] ?? 0;
   const color = KEY_COLOR[key] || '#ffffff';
-  const glow  = KEY_GLOW[key]  || 'rgba(255,255,255,0.5)';
   const shape = KEY_SHAPE[key] || ARROW_SHAPE;
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   svg.setAttribute('viewBox', '0 0 100 100');
@@ -230,8 +230,9 @@ function createArrowEl(key, isTarget) {
     outline.setAttribute('stroke-linejoin', 'round');
     g.appendChild(outline);
   } else {
-    // Solid filled arrow for scrolling notes
-    svg.style.filter = `drop-shadow(0 0 6px ${glow})`;
+    // Solid filled arrow for scrolling notes. Deliberately no drop-shadow: the glow
+    // smeared the edges, and at higher note speeds a fast-moving halo reads as motion
+    // blur and makes the arrow hard to track. Colour and the dark stroke carry it.
     const fill = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     fill.setAttribute('d', shape);
     fill.setAttribute('fill', color);
