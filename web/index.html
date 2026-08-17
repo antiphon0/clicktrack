@@ -7,7 +7,7 @@
   <!-- ?v= is a cache buster. There is no build step, so browsers will happily serve a
        stale game.js/renderer.js against fresh HTML, which throws on elements that no
        longer exist and kills init(). Bump this when assets change. -->
-  <link rel="stylesheet" href="styles.css?v=10">
+  <link rel="stylesheet" href="styles.css?v=11">
 </head>
 <body>
   <div id="app">
@@ -23,8 +23,10 @@
       <!-- Audio Status -->
       <div id="audio-status" class="panel">
         <div id="status-row">
-          <button id="listen-btn" class="btn btn-small btn-secondary">&#127925; Sync Audio</button>
-          <button id="stop-btn" class="btn btn-small btn-secondary" style="display:none;">&#9632; Stop</button>
+          <!-- The status lamp on each of these is drawn by CSS (::before), so no
+               emoji in the label. -->
+          <button id="listen-btn" class="btn btn-small btn-secondary">Sync Audio</button>
+          <button id="stop-btn" class="btn btn-small btn-secondary" style="display:none;">Stop</button>
           <button id="audio-help-btn" class="btn-icon" title="Audio setup help">?</button>
           <div id="vu-meter">
             <div id="vu-fill"></div>
@@ -72,9 +74,12 @@
           <div id="audio-guide-status"></div>
           <button id="audio-guide-close" class="btn btn-small btn-secondary">Got it</button>
         </div>
-        <div id="bpm-selector"></div>
+        <div id="tempo-row">
+          <span class="tempo-label">Tempo</span>
+          <div id="bpm-selector"></div>
+        </div>
         <div id="hyperspeed-row">
-          <span id="hyperspeed-label">Note speed</span>
+          <span id="hyperspeed-label">Scroll</span>
           <div id="hyperspeed-selector"></div>
         </div>
       </div>
@@ -122,8 +127,8 @@
       <div id="side-tabs">
         <button class="side-tab active" data-tab="upgrades">Upgrades</button>
         <button class="side-tab" data-tab="dancers">Dancers</button>
-        <button class="side-tab" data-tab="prestige">&#11088; Prestige</button>
-        <button class="side-tab" data-tab="achievements">&#127942; Achieve</button>
+        <button class="side-tab" data-tab="prestige">Prestige</button>
+        <button class="side-tab" data-tab="achievements">Awards</button>
         <button class="side-tab" data-tab="stats">Stats</button>
       </div>
 
@@ -157,7 +162,7 @@
             <div class="stat-row"><span class="stat-label">Pending stars</span><span class="stat-value" id="prestige-pending">0</span></div>
           </div>
           <button id="prestige-btn" class="btn prestige-btn" disabled>
-            Prestige for <span id="prestige-gain">0</span> &#11088;
+            Prestige for <span id="prestige-gain">0</span> &#9733;
           </button>
           <!-- Text is overwritten by updatePrestigePanel from PRESTIGE_EARNED_PER_STAR -->
           <p class="hint" id="prestige-hint">Earn enough total beats to unlock prestige</p>
@@ -183,7 +188,7 @@
     </div>
   </div>
 
-  <script src="game.js?v=10"></script>
-  <script src="renderer.js?v=10"></script>
+  <script src="game.js?v=11"></script>
+  <script src="renderer.js?v=11"></script>
 </body>
 </html>

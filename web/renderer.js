@@ -1034,18 +1034,20 @@ function refreshUpgradeAffordability() {
     if (buyMode === 'Max') {
       count = getMaxAffordableUpgrades(state, key);
       cost = count > 0 ? getBulkUpgradeCost(ks.level, count) : getKeyUpgradeCost(ks.level);
-      label = count > 0 ? `MAX (${count})` : '\u{1F512}';
+      label = count > 0 ? `MAX ×${count}` : '—';
     } else {
       count = parseInt(buyMode);
       cost = getBulkUpgradeCost(ks.level, count);
-      label = state.currency >= cost ? `UPGRADE ${buyMode}` : '\u{1F512}';
+      label = state.currency >= cost ? `BUY ${buyMode}` : '—';
     }
     const canAfford = buyMode === 'Max' ? count > 0 : state.currency >= cost;
 
     const costEl = row.querySelector('.key-upgrade-cost');
     const actionEl = row.querySelector('.key-upgrade-action');
-    if (costEl) costEl.textContent = formatNumber(cost) + ' beats';
+    const meterEl = row.querySelector('.key-upgrade-meter-fill');
+    if (costEl) costEl.textContent = formatNumber(cost);
     if (actionEl) actionEl.textContent = label;
+    if (meterEl) meterEl.style.width = (cost > 0 ? Math.min(100, (state.currency / cost) * 100) : 100) + '%';
 
     const wasAffordable = row.classList.contains('affordable');
     if (canAfford !== wasAffordable) {
@@ -1081,22 +1083,33 @@ function updateUpgrades() {
     if (buyMode === 'Max') {
       count = getMaxAffordableUpgrades(state, key);
       cost = count > 0 ? getBulkUpgradeCost(ks.level, count) : getKeyUpgradeCost(ks.level);
-      label = count > 0 ? `MAX (${count})` : '\u{1F512}';
+      label = count > 0 ? `MAX ×${count}` : '—';
     } else {
       count = parseInt(buyMode);
       cost = getBulkUpgradeCost(ks.level, count);
-      label = state.currency >= cost ? `UPGRADE ${buyMode}` : '\u{1F512}';
+      label = state.currency >= cost ? `BUY ${buyMode}` : '—';
     }
     const canAfford = buyMode === 'Max' ? count > 0 : state.currency >= cost;
 
+    // Channel-strip meter: how much of this buy your balance currently covers.
+    // Full bar means it is affordable right now, so the meter and the lit action
+    // button always agree.
+    const fillPct = cost > 0 ? Math.min(100, (state.currency / cost) * 100) : 100;
+    const displayName = getKeyDisplayName(key);
+
     const div = document.createElement('div');
-    div.className = 'key-upgrade' + (canAfford ? ' affordable' : '');
+    // lane-label-key-* supplies --key-color / --key-glow, tying each strip to the
+    // colour of its lane on the track.
+    div.className = `key-upgrade lane-label-key-${key}` + (canAfford ? ' affordable' : '');
     div.dataset.key = key;
     div.innerHTML = `
-      <span class="key-upgrade-label">${getKeyDisplayName(key)}</span>
+      <span class="key-upgrade-label${displayName.length > 2 ? ' key-word' : ''}">${displayName}</span>
       <span class="key-upgrade-info">
-        <span class="key-upgrade-level">Level ${ks.level}</span>
-        <span class="key-upgrade-cost">${formatNumber(cost)} beats</span>
+        <span class="key-upgrade-readout">
+          <span class="key-upgrade-level">LV ${ks.level}</span>
+          <span class="key-upgrade-cost">${formatNumber(cost)}</span>
+        </span>
+        <span class="key-upgrade-meter"><span class="key-upgrade-meter-fill" style="width:${fillPct}%"></span></span>
       </span>
       <span class="key-upgrade-action">${label}</span>
     `;
@@ -1170,7 +1183,7 @@ function updateAchievementsPanel() {
   for (const ach of ACHIEVEMENTS) {
     const done = unlocked.includes(ach.id);
     html += `<div class="achievement-item ${done ? 'unlocked' : 'locked'}">
-      <span class="achievement-icon">${done ? '\u2705' : '\u{1F512}'}</span>
+      <span class="achievement-icon">${done ? '\u25cf' : '\u25cb'}</span>
       <div class="achievement-info">
         <div class="achievement-name">${ach.name}</div>
         <div class="achievement-desc">${ach.desc}</div>
@@ -1196,7 +1209,7 @@ function showToast(msg) {
 function showAchievementToast(ach) {
   const toast = document.createElement('div');
   toast.className = 'achievement-toast';
-  toast.textContent = '\u{1F3C6} ' + ach.name + ' unlocked!';
+  toast.textContent = ach.name.toUpperCase() + ' — UNLOCKED';
   document.body.appendChild(toast);
   setTimeout(() => { if (toast.parentNode) toast.remove(); }, 2800);
 }
@@ -1476,7 +1489,7 @@ function updateStarShop() {
         <div class="star-shop-name">${upg.name}</div>
         <div class="star-shop-desc">${upg.desc}</div>
       </div>
-      <span class="star-shop-badge ${owned ? 'owned' : canAfford && !locked ? 'buy' : 'locked'}">${owned ? 'OWNED' : canAfford && !locked ? 'BUY' : '\u{1F512}'}</span>
+      <span class="star-shop-badge ${owned ? 'owned' : canAfford && !locked ? 'buy' : 'locked'}">${owned ? 'OWNED' : canAfford && !locked ? 'BUY' : 'LOCKED'}</span>
     `;
 
     if (canAfford && !locked) {
@@ -1802,16 +1815,20 @@ function showWelcomeBack(elapsedMs, earnings) {
   const hours = Math.floor(minutes / 60);
   const timeStr = hours > 0 ? `${hours}h ${minutes % 60}m` : `${minutes}m`;
 
+  // Styled from styles.css, not from inline cssText: this modal is the first thing
+  // a returning player sees, so it has to carry the same console vocabulary as the
+  // rest of the UI rather than its own colours.
   const overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:2000;';
+  overlay.className = 'welcome-overlay';
 
   const modal = document.createElement('div');
-  modal.style.cssText = 'background:#1a1a2e;border:1px solid #333;border-radius:12px;padding:28px 36px;text-align:center;max-width:340px;color:#eee;';
+  modal.className = 'welcome-modal';
   modal.innerHTML = `
-    <h2 style="margin:0 0 12px;color:#f0c040;">Welcome back!</h2>
-    <p style="margin:0 0 8px;color:#aaa;">You were away for <strong style="color:#eee;">${timeStr}</strong></p>
-    <p style="margin:0 0 18px;font-size:1.2rem;">Your dancers earned <strong style="color:#44dd77;">${formatNumber(earnings)}</strong> beats</p>
-    <button style="padding:8px 24px;background:#44dd77;color:#111;border:none;border-radius:6px;font-weight:700;cursor:pointer;font-size:0.95rem;">Collect</button>
+    <div class="welcome-eyebrow">Offline session</div>
+    <div class="welcome-readout">${formatNumber(earnings)}</div>
+    <div class="welcome-unit">beats banked by your dancers</div>
+    <div class="welcome-away">Away for <span>${timeStr}</span></div>
+    <button class="btn welcome-collect">Collect</button>
   `;
   modal.querySelector('button').addEventListener('click', () => overlay.remove());
   overlay.appendChild(modal);
